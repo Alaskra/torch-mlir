@@ -71,22 +71,23 @@ static Value createInitialValueForReduceOp(Operation *op, Type elementTy,
 }
 
 // Util for converting AtenArgmaxOp and AtenMaxDimOp
-static llvm::Optional<ValueRange>
+static std::optional<ValueRange>
 getMaxInDim(ConversionPatternRewriter &rewriter, Operation *op, Value &input,
             ArrayRef<Value> inputShapeVec, int64_t dim,
             size_t dimSizeIndexBits) {
   auto inputTy = input.getType().template cast<RankedTensorType>();
   if (!inputTy) {
-    return llvm::None;
+    return std::nullopt;
   }
   if (!inputTy.getElementType().isIntOrFloat()) {
-    return llvm::None;
+    return std::nullopt;
   }
   auto inputShape = inputTy.getShape();
   auto inputElemTy = inputTy.getElementType();
 
   Value initValue = createInitialValueForReduceOp(op, inputElemTy, rewriter);
-  if (!initValue) return llvm::None;
+  if (!initValue)
+    return std::nullopt;
   Value initIndex;
   if (dimSizeIndexBits == 32) {
     initIndex = mhlo::getConstTensor<int32_t>(rewriter, op, {0}, {}).value();

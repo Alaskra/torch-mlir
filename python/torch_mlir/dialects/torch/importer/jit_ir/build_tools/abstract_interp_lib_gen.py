@@ -48,26 +48,6 @@ def aten〇triu〡shape(self: List[int], diagonal: int = 0) -> List[int]:
 def aten〇tanh〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
-@check_dtype_function([
-    Invocation(NonZeroDTensorWithDtype(torch.float32)),
-    Invocation(NonZeroDTensorWithDtype(torch.float64)),
-    Invocation(NonZeroDTensorWithDtype(torch.bfloat16)),
-    Invocation(NonZeroDTensorWithDtype(torch.int64)),
-    Invocation(NonZeroDTensorWithDtype(torch.int32)),
-    Invocation(NonZeroDTensorWithDtype(torch.bool)),
-    Invocation(ZeroDTensorWithDtype(torch.float32)),
-    Invocation(ZeroDTensorWithDtype(torch.float64)),
-    Invocation(ZeroDTensorWithDtype(torch.bfloat16)),
-    Invocation(ZeroDTensorWithDtype(torch.int64)),
-    Invocation(ZeroDTensorWithDtype(torch.int32)),
-    Invocation(ZeroDTensorWithDtype(torch.bool)),
-])
-def aten〇tanh〡dtype(self_rank: int, self_dtype: int) -> int:
-    if self_dtype == torch.float64 or self_dtype == torch.bfloat16:
-        return self_dtype
-    else:
-        return torch.float32
-
 def aten〇erf〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -94,6 +74,26 @@ def aten〇exp〡shape(self: List[int]) -> List[int]:
 
 def aten〇expm1〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
+
+@check_dtype_function([
+    Invocation(NonZeroDTensorWithDtype(torch.float32)),
+    Invocation(NonZeroDTensorWithDtype(torch.float64)),
+    Invocation(NonZeroDTensorWithDtype(torch.bfloat16)),
+    Invocation(NonZeroDTensorWithDtype(torch.int64)),
+    Invocation(NonZeroDTensorWithDtype(torch.int32)),
+    Invocation(NonZeroDTensorWithDtype(torch.bool)),
+    Invocation(ZeroDTensorWithDtype(torch.float32)),
+    Invocation(ZeroDTensorWithDtype(torch.float64)),
+    Invocation(ZeroDTensorWithDtype(torch.bfloat16)),
+    Invocation(ZeroDTensorWithDtype(torch.int64)),
+    Invocation(ZeroDTensorWithDtype(torch.int32)),
+    Invocation(ZeroDTensorWithDtype(torch.bool)),
+])
+def aten〇expm1〡dtype(self_rank: int, self_dtype: int) -> int:
+    if self_dtype == torch.float64 or self_dtype == torch.bfloat16 or self_dtype == torch.float16:
+        return self_dtype
+    else:
+        return torch.float32
 
 def aten〇sin〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
@@ -135,6 +135,9 @@ def aten〇tanh_backward〡shape(grad_output: List[int], output: List[int]) -> L
     return upstream_shape_functions.unary(grad_output)
 
 def aten〇gelu_backward〡shape(grad_output: List[int], self: List[int], approximate: str = "none") -> List[int]:
+    return upstream_shape_functions.unary(grad_output)
+
+def aten〇leaky_relu_backward〡shape(grad_output: List[int], self: List[int], negative_slope: float, self_is_result: bool) -> List[int]:
     return upstream_shape_functions.unary(grad_output)
 
 def aten〇ceil〡shape(self: List[int]) -> List[int]:
@@ -274,6 +277,9 @@ def aten〇rsub〇Scalar〡dtype(self_rank: int, self_dtype: int, other: Union[i
 def aten〇leaky_relu〡shape(self: List[int], negative_slope: float = 0.01) -> List[int]:
     return upstream_shape_functions.unary(self)
 
+def aten〇prelu〡shape(self: List[int], weight: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
 def aten〇gather〡shape(self: List[int], dim: int, index: List[int], sparse_grad: bool = False) -> List[int]:
     return upstream_shape_functions.unary(index)
 
@@ -318,6 +324,9 @@ def aten〇std〡shape(self: List[int], unbiased: bool = True) -> List[int]:
     return []
 
 def aten〇std〇dim〡shape(self: List[int], dim: Optional[List[int]], unbiased: bool = True, keepdim: bool = False) -> List[int]:
+    return upstream_shape_functions.sum_mean_dim(self, dim, keepdim, None)
+
+def aten〇std〇correction〡shape(self: List[int], dim: Optional[List[int]] = None, correction: Optional[int] = None, keepdim: bool = False) -> List[int]:
     return upstream_shape_functions.sum_mean_dim(self, dim, keepdim, None)
 
 def _reduce_along_dim(self: List[int], dim: int, keepdim: bool):
@@ -678,6 +687,15 @@ def aten〇bitwise_not〡shape(self: List[int]) -> List[int]:
 def aten〇logical_or〡shape(self: List[int], other: List[int]) -> List[int]:
     return upstream_shape_functions.broadcast(self, other)
 
+def aten〇logical_and〡shape(self: List[int], other: List[int]) -> List[int]:
+    return upstream_shape_functions.broadcast(self, other)
+
+def aten〇logical_xor〡shape(self: List[int], other: List[int]) -> List[int]:
+    return upstream_shape_functions.broadcast(self, other)
+
+def aten〇logical_not〡shape(self: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
 def aten〇threshold〡shape(self: List[int], threshold: float, value: float) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -969,6 +987,37 @@ def aten〇index〇Tensor_hacked_twin〡shape(self: List[int], indices: List[Lis
 
 def aten〇cat〡shape(tensors: List[List[int]], dim: int = 0) -> List[int]:
     return upstream_shape_functions.cat(tensors, dim)
+
+def aten〇fft_fft〡shape(self: List[int], n: Optional[int] = None, dim: int = -1, norm: Optional[str] = None) -> List[int]:
+    return self
+
+@check_dtype_function([
+    Invocation(NonZeroDTensorWithDtype(torch.complex64)),
+    Invocation(NonZeroDTensorWithDtype(torch.complex128)),
+    Invocation(NonZeroDTensorWithDtype(torch.float)),
+    Invocation(NonZeroDTensorWithDtype(torch.double)),
+    Invocation(NonZeroDTensorWithDtype(torch.bool)),
+    Invocation(NonZeroDTensorWithDtype(torch.uint8)),
+    Invocation(NonZeroDTensorWithDtype(torch.int8)),
+    Invocation(NonZeroDTensorWithDtype(torch.int16)),
+    Invocation(NonZeroDTensorWithDtype(torch.int32)),
+    Invocation(NonZeroDTensorWithDtype(torch.int64)),
+    ErrorInvocation(NonZeroDTensorWithDtype(torch.float16)),
+    ErrorInvocation(NonZeroDTensorWithDtype(torch.bfloat16)),
+])
+def aten〇fft_fft〡dtype(self_rank: int, self_dtype: int, n: Optional[int] = None, dim: int = -1, norm: Optional[str] = None) -> int:
+    if self_dtype == torch.complex64 or self_dtype == torch.complex128:
+        return self_dtype
+    elif self_dtype == torch.float:
+        return torch.complex64
+    elif self_dtype == torch.double:
+        return torch.complex128
+    elif self_dtype == torch.bool or self_dtype == torch.uint8 or \
+         self_dtype == torch.int8 or self_dtype == torch.int16 or \
+         self_dtype == torch.int32 or self_dtype == torch.int64:
+        return torch.complex64
+    else:
+        assert False, "Unsupported dtype"
 
 class DummyClassType:
     def __init__(self):

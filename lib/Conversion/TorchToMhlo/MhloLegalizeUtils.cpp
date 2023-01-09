@@ -49,8 +49,8 @@ Value getMhloConstTensorSingleF64(PatternRewriter &rewriter, Operation *op,
 // T: storage C type.
 // Default template creates a constant tensor in T.
 template <typename T>
-llvm::Optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
-                                     ArrayRef<T> vec, ArrayRef<int64_t> shape) {
+std::optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
+                                    ArrayRef<T> vec, ArrayRef<int64_t> shape) {
   uint64_t num_total_elements = 1;
   for (int64_t a : shape) {
     num_total_elements *= a;
@@ -58,7 +58,7 @@ llvm::Optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
 
   if (vec.size() != num_total_elements) {
     op->emitOpError("getConstTensor(): number of elements mismatch.");
-    return llvm::None;
+    return std::nullopt;
   }
 
   auto const_type =
@@ -72,9 +72,9 @@ llvm::Optional<Value> getConstTensor(PatternRewriter &rewriter, Operation *op,
 
 // Template specialization for APInt
 template <>
-llvm::Optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
-                                            Operation *op, ArrayRef<APInt> vec,
-                                            ArrayRef<int64_t> shape) {
+std::optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
+                                           Operation *op, ArrayRef<APInt> vec,
+                                           ArrayRef<int64_t> shape) {
   uint64_t num_total_elements = 1;
   for (int64_t a : shape) {
     num_total_elements *= a;
@@ -82,7 +82,7 @@ llvm::Optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
 
   if (vec.size() != num_total_elements) {
     op->emitOpError("getConstTensor(): number of elements mismatch.");
-    return llvm::None;
+    return std::nullopt;
   }
   auto const_type = RankedTensorType::get(
       shape, rewriter.getIntegerType(vec[0].getBitWidth()));
@@ -95,9 +95,9 @@ llvm::Optional<Value> getConstTensor<APInt>(PatternRewriter &rewriter,
 
 // Template specialization for float
 template <>
-llvm::Optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
-                                            Operation *op, ArrayRef<float> vec,
-                                            ArrayRef<int64_t> shape) {
+std::optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
+                                           Operation *op, ArrayRef<float> vec,
+                                           ArrayRef<int64_t> shape) {
   uint64_t num_total_elements = 1;
   for (int64_t a : shape) {
     num_total_elements *= a;
@@ -105,7 +105,7 @@ llvm::Optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
 
   if (vec.size() != num_total_elements) {
     op->emitOpError("getConstTensor(): number of elements mismatch.");
-    return llvm::None;
+    return std::nullopt;
   }
 
   auto const_type = RankedTensorType::get(shape, rewriter.getF32Type());
@@ -117,9 +117,9 @@ llvm::Optional<Value> getConstTensor<float>(PatternRewriter &rewriter,
 }
 
 template <>
-llvm::Optional<Value>
-getConstTensor<double>(PatternRewriter &rewriter, Operation *op,
-                       ArrayRef<double> vec, ArrayRef<int64_t> shape) {
+std::optional<Value> getConstTensor<double>(PatternRewriter &rewriter,
+                                            Operation *op, ArrayRef<double> vec,
+                                            ArrayRef<int64_t> shape) {
   uint64_t num_total_elements = 1;
   for (int64_t a : shape) {
     num_total_elements *= a;
@@ -127,7 +127,7 @@ getConstTensor<double>(PatternRewriter &rewriter, Operation *op,
 
   if (vec.size() != num_total_elements) {
     op->emitOpError("getConstTensor(): number of elements mismatch.");
-    return llvm::None;
+    return std::nullopt;
   }
 
   auto const_type = RankedTensorType::get(shape, rewriter.getF64Type());
@@ -139,15 +139,15 @@ getConstTensor<double>(PatternRewriter &rewriter, Operation *op,
 }
 
 // Template instantiation
-template llvm::Optional<Value> getConstTensor<int32_t>(PatternRewriter &,
-                                                       Operation *,
-                                                       ArrayRef<int32_t> vec,
-                                                       ArrayRef<int64_t> shape);
+template std::optional<Value> getConstTensor<int32_t>(PatternRewriter &,
+                                                      Operation *,
+                                                      ArrayRef<int32_t> vec,
+                                                      ArrayRef<int64_t> shape);
 
-template llvm::Optional<Value> getConstTensor<int64_t>(PatternRewriter &,
-                                                       Operation *,
-                                                       ArrayRef<int64_t> vec,
-                                                       ArrayRef<int64_t> shape);
+template std::optional<Value> getConstTensor<int64_t>(PatternRewriter &,
+                                                      Operation *,
+                                                      ArrayRef<int64_t> vec,
+                                                      ArrayRef<int64_t> shape);
 
 template <typename T>
 static bool isInValidRange(bool isFloat, const double &doubleValue, bool isInt,

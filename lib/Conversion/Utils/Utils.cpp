@@ -15,6 +15,7 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
+#include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 
 namespace mlir {
 namespace torch {
@@ -237,11 +238,18 @@ SmallVector<Value> getTypeConvertedValues(OpBuilder &b, Location loc,
   }));
 }
 
+mlir::RankedTensorType GetTypeFromTensorShape(llvm::ArrayRef<int64_t> shape,
+                                              mlir::Type elementType,
+                                              mlir::Attribute encoding) {
+  return mlir::RankedTensorType::get(makeShapeLLVMCompatible(shape),
+                                     elementType, encoding);
+}
+
 // Convert a scalar value to the target type. The scalar value can be an element
 // from a tensor or a scalar in the pytorch dialect. Both the scalar and dtype
 // should be converted builtin types.
 Value convertScalarToDtype(OpBuilder &b, Location loc, Value scalar, Type dtype,
-                           llvm::Optional<Type> srcOriginalDtype) {
+                           std::optional<Type> srcOriginalDtype) {
   Type scalarType = scalar.getType();
   if (scalarType == dtype)
     return scalar;

@@ -215,7 +215,7 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
     Value rhs = convertScalarToDtype(b, loc, payloadArgs[1], dtype);
     return b.create<arith::OrIOp>(loc, lhs, rhs);
   }
-  if (auto logicalOr = dyn_cast<AtenLogicalOrOp>(op)) {
+  if (isa<AtenLogicalOrOp, AtenLogicalAndOp, AtenLogicalXorOp>(op)) {
     MLIRContext *context = op->getContext();
     Type floatDtype = mlir::FloatType::getF64(context);
     Value lhs = convertScalarToDtype(b, loc, payloadArgs[0], floatDtype);
@@ -224,7 +224,24 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
         b.create<arith::ConstantOp>(loc, b.getFloatAttr(floatDtype, 0));
     Value lhsTest = createNotEqual(b, loc, floatDtype, lhs, zero);
     Value rhsTest = createNotEqual(b, loc, floatDtype, rhs, zero);
-    return b.create<arith::OrIOp>(loc, lhsTest, rhsTest);
+    if (isa<AtenLogicalOrOp>(op)) {
+      return b.create<arith::OrIOp>(loc, lhsTest, rhsTest);
+    }
+    if (isa<AtenLogicalAndOp>(op)) {
+      return b.create<arith::AndIOp>(loc, lhsTest, rhsTest);
+    }
+    if (isa<AtenLogicalXorOp>(op)) {
+      return b.create<arith::XOrIOp>(loc, lhsTest, rhsTest);
+    }
+    llvm_unreachable("Unknown op type");
+  }
+  if (isa<AtenLogicalNotOp>(op)) {
+    MLIRContext *context = op->getContext();
+    Type floatDtype = mlir::FloatType::getF64(context);
+    Value self = convertScalarToDtype(b, loc, payloadArgs[0], floatDtype);
+    Value zero =
+        b.create<arith::ConstantOp>(loc, b.getFloatAttr(floatDtype, 0));
+    return createEqual(b, loc, floatDtype, self, zero);
   }
   if (isa<AtenAbsOp>(op))
     return b.create<math::AbsFOp>(loc, payloadArgs[0]);
@@ -262,12 +279,12 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
     }
     return b.create<math::RoundOp>(loc, payloadArgs[0]);
   }
-  if (auto lrelu = dyn_cast<AtenLeakyReluOp>(op)) {
-    if (!lrelu.getType()
+  if (auto prelu = dyn_cast<AtenPreluOp>(op)) {
+    if (!prelu.getType()
              .cast<ValueTensorType>()
              .getDtype()
              .isa<mlir::FloatType>()) {
-      lrelu.emitError("unimplemented: non-floating point dtype");
+      prelu.emitError("unimplemented: non-floating point dtype");
       return nullptr;
     }
     Type elementType = payloadArgs[0].getType();
@@ -279,7 +296,7 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
         b.create<arith::SelectOp>(loc, pred, payloadArgs[0], constZero);
     Value negativePart =
         b.create<arith::SelectOp>(loc, pred, constZero, payloadArgs[0]);
-    Value scale = convertScalarToDtype(b, loc, operands[1], elementType);
+    Value scale = convertScalarToDtype(b, loc, payloadArgs[1], elementType);
     Value scaledNegativePart =
         b.create<arith::MulFOp>(loc, negativePart, scale);
     return b.create<arith::AddFOp>(loc, positivePart, scaledNegativePart);
@@ -1037,7 +1054,7 @@ public:
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
-    if (!isa<AtenTanhOp, AtenReluOp, AtenLeakyReluOp, AtenGeluOp,
+    if (!isa<AtenTanhOp, AtenReluOp, AtenPreluOp, AtenGeluOp,
              AtenGeluBackwardOp, AtenAddTensorOp, AtenMulTensorOp,
              AtenDivTensorOp, AtenDivTensorModeOp, AtenSubTensorOp, AtenAtan2Op,
              AtenLerpTensorOp, AtenSigmoidOp, AtenExpOp, AtenExpm1Op,
@@ -1052,9 +1069,9 @@ public:
              AtenEqTensorOp, AtenLtTensorOp, AtenSubScalarOp, AtenAddScalarOp,
              AtenThresholdOp, AtenThresholdBackwardOp, AtenCloneOp, AtenSinOp,
              AtenCosOp, AtenNeScalarOp, AtenNegOp, AtenMaskedFillScalarOp,
-             AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenTriuOp,
-             AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp, AtenFillTensorOp>(
-            op))
+             AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenLogicalAndOp,
+             AtenLogicalXorOp, AtenLogicalNotOp, AtenTriuOp, AtenBitwiseNotOp,
+             AtenRoundOp, AtenFillScalarOp, AtenFillTensorOp>(op))
       return rewriter.notifyMatchFailure(op, "not a supported elementwise op");
 
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
@@ -1518,20 +1535,20 @@ void mlir::torch::torch_to_linalg::populateUncategorizedPatternsAndLegality(
     ConversionTarget &target) {
   MLIRContext *context = patterns.getContext();
   target.addIllegalOp<
-      AtenTanhOp, AtenReluOp, AtenLeakyReluOp, AtenGeluOp, AtenGeluBackwardOp,
-      AtenAddTensorOp, AtenMulTensorOp, AtenDivTensorOp, AtenDivTensorModeOp,
-      AtenSubTensorOp, AtenLerpTensorOp, AtenSigmoidOp, AtenMinimumOp,
-      AtenAtan2Op, AtenMaximumOp, AtenToDtypeOp, AtenClampOp, AtenRsubScalarOp,
-      AtenLogOp, AtenErfOp, AtenSqrtOp, AtenFloorOp, AtenCeilOp,
+      AtenTanhOp, AtenReluOp, AtenGeluOp, AtenGeluBackwardOp, AtenAddTensorOp,
+      AtenMulTensorOp, AtenDivTensorOp, AtenDivTensorModeOp, AtenSubTensorOp,
+      AtenLerpTensorOp, AtenSigmoidOp, AtenMinimumOp, AtenAtan2Op,
+      AtenMaximumOp, AtenToDtypeOp, AtenClampOp, AtenRsubScalarOp, AtenLogOp,
+      AtenErfOp, AtenSqrtOp, AtenFloorOp, AtenCeilOp, AtenPreluOp,
       AtenPowTensorScalarOp, AtenPowTensorTensorOp, AtenLog2Op, AtenLog1pOp,
       AtenRsqrtOp, AtenAbsOp, AtenReciprocalOp, AtenBitwiseAndTensorOp,
       AtenBitwiseOrTensorOp, AtenGtScalarOp, AtenGeScalarOp, AtenEqScalarOp,
       AtenLtScalarOp, AtenLeScalarOp, AtenWhereSelfOp, AtenGtTensorOp,
       AtenEqTensorOp, AtenLtTensorOp, AtenThresholdOp, AtenThresholdBackwardOp,
       AtenCloneOp, AtenSinOp, AtenCosOp, AtenNeScalarOp, AtenMaskedFillScalarOp,
-      AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenTriuOp,
-      AtenRemainderScalarOp, AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp,
-      AtenFillTensorOp>();
+      AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenLogicalAndOp,
+      AtenLogicalXorOp, AtenLogicalNotOp, AtenTriuOp, AtenRemainderScalarOp,
+      AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp, AtenFillTensorOp>();
   patterns.add<ConvertElementwiseOp>(typeConverter, context);
   target.addIllegalOp<AtenNllLossForwardOp>();
   patterns.add<ConvertAtenDetachOp>(typeConverter, context);

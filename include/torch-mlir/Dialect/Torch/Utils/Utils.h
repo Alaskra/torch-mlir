@@ -23,8 +23,8 @@ bool getListConstructElements(Value v, SmallVectorImpl<Value> &elems);
 /// Returns the index indicated by `v` for a list of given `length`.
 /// If the index is negative, it is adjusted to `length` + `v`.
 /// `None` is returned the index is not an integer in the range [0,`length).
-llvm::Optional<int64_t> matchLegalConstantIndexIntoListOfSize(Value v,
-                                                              int64_t length);
+std::optional<int64_t> matchLegalConstantIndexIntoListOfSize(Value v,
+                                                             int64_t length);
 torch_upstream::ScalarType getScalarTypeForType(Type type);
 Type getTypeForScalarType(
     MLIRContext *context, torch_upstream::ScalarType dtypeInt,
@@ -61,8 +61,8 @@ Value convertTensorToDtype(PatternRewriter &rewriter, Location loc, Value input,
 bool isBuiltInType(Type type);
 
 // Helper funtion to get rank of `Base tensor type`.
-// llvm::None is returned if the tensorRank can't be determined.
-Optional<unsigned> getTensorRank(Value tensor);
+// std::nullopt is returned if the tensorRank can't be determined.
+std::optional<unsigned> getTensorRank(Value tensor);
 
 bool isViewLikeOp(Operation *op);
 

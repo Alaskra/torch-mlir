@@ -92,7 +92,7 @@ struct torch_constant_device_op_binder {
 };
 } // namespace detail
 
-/// Matches the integer stored in a `torch.constant.bool`.
+/// Matches the integer stored in a `torch.constant.int`.
 inline detail::torch_constant_int_op_binder
 m_TorchConstantInt(int64_t *bind_value) {
   return detail::torch_constant_int_op_binder(bind_value);
@@ -174,11 +174,11 @@ m_TorchListOfConstantInts(SmallVectorImpl<int64_t> &bind_values) {
 namespace detail {
 /// Matches the optional constant integers stored in a `torch.ListConstruct`.
 struct torch_list_of_optional_constant_ints_op_binder {
-  SmallVectorImpl<Optional<int64_t>> &bind_values;
+  SmallVectorImpl<std::optional<int64_t>> &bind_values;
 
   /// Creates a matcher instance that binds the value to bvs if match succeeds.
   torch_list_of_optional_constant_ints_op_binder(
-      SmallVectorImpl<Optional<int64_t>> &bvs)
+      SmallVectorImpl<std::optional<int64_t>> &bvs)
       : bind_values(bvs) {}
 
   bool match(Operation *op) {
@@ -190,7 +190,7 @@ struct torch_list_of_optional_constant_ints_op_binder {
       if (matchPattern(value, m_TorchConstantInt(&num)))
         bind_values.push_back(num);
       else if (value.getType().isa<Torch::NoneType>())
-        bind_values.push_back(llvm::None);
+        bind_values.push_back(std::nullopt);
       else
         return false;
     }
@@ -203,7 +203,7 @@ struct torch_list_of_optional_constant_ints_op_binder {
 /// `torch.prim.ListConstruct`.
 inline detail::torch_list_of_optional_constant_ints_op_binder
 m_TorchListOfOptionalConstantInts(
-    SmallVectorImpl<Optional<int64_t>> &bind_values) {
+    SmallVectorImpl<std::optional<int64_t>> &bind_values) {
   return detail::torch_list_of_optional_constant_ints_op_binder(bind_values);
 }
 

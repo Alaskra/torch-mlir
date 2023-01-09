@@ -47,7 +47,7 @@ def Torch_NnModuleType : Torch_Type<"NnModule", "nn.Module"> {
 // For standard ArrayRefs, which require allocation.
 class OptionalArrayRefTorchParameter<string arrayOf, string desc = ""> :
     AttrOrTypeParameter<
-      "::llvm::Optional<::llvm::ArrayRef<" # arrayOf # ">>", desc> {
+      "::std::optional<::llvm::ArrayRef<" # arrayOf # ">>", desc> {
   let allocator = [{
     if ($_self.has_value()) {
       $_dst.value() = $_allocator.copyInto($_self.value());
@@ -128,6 +128,7 @@ class AnyTorchTensorType<string name, string typeMnemonic>
     | torch.bool        | i1                 |
     | torch.qint8       | !torch.qint8       |
     | torch.quint8      | !torch.quint8      |
+    | torch.complex*    | complex<*>         |
     |-------------------|--------------------|
     ```
 

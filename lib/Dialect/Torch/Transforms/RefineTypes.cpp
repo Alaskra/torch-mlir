@@ -112,10 +112,10 @@ static torch_upstream::TypeKind getTypeKind(Type type) {
 }
 
 /// Returns the dtype that assumes information from both `lhs` and `rhs`.
-/// Returns `None` if the types are contradictory. Note this can only be used
-/// on the `dtype` from tensors and can't be used on other types like scalar
-/// types.
-static Optional<Type> meetElementTypes(Type lhs, Type rhs) {
+/// Returns `std::nullopt` if the types are contradictory. Note this can only
+/// be used on the `dtype` from tensors and can't be used on other types like
+/// scalar types.
+static std::optional<Type> meetElementTypes(Type lhs, Type rhs) {
   auto isNullOrBuiltIn = [](Type type) { return !type || isBuiltInType(type); };
   (void)isNullOrBuiltIn;
   assert(isNullOrBuiltIn(lhs) && "`lhs` must be a builtin type");
@@ -127,7 +127,7 @@ static Optional<Type> meetElementTypes(Type lhs, Type rhs) {
     return lhs;
   if (lhs == rhs)
     return lhs;
-  return None;
+  return std::nullopt;
 }
 
 enum class OptionalKnowledge {
@@ -137,8 +137,8 @@ enum class OptionalKnowledge {
 };
 
 /// Returns the OptionalKnowledge that assumes information from both `lhs` and
-/// `rhs`. Returns `None` if the knowledges are contradictory.
-static Optional<OptionalKnowledge>
+/// `rhs`. Returns `std::nullopt` if the knowledges are contradictory.
+static std::optional<OptionalKnowledge>
 meetOptionalKnowledge(OptionalKnowledge lhs, OptionalKnowledge rhs) {
   if (lhs == OptionalKnowledge::unKnown)
     return rhs;
@@ -146,7 +146,7 @@ meetOptionalKnowledge(OptionalKnowledge lhs, OptionalKnowledge rhs) {
     return lhs;
   if (lhs == rhs)
     return lhs;
-  return None;
+  return std::nullopt;
 }
 
 static OptionalKnowledge joinOptionalKnowledge(OptionalKnowledge lhs,
@@ -327,30 +327,30 @@ struct ValueKnowledge {
 
   // Given two pieces of static knowledge, calculate new knowledge that assumes
   // the facts from both.
-  // If the two pieces of knowledge are contradictory, None is returned.
-  static Optional<ValueKnowledge> meet(const ValueKnowledge &lhs,
-                                       const ValueKnowledge &rhs) {
+  // If the two pieces of knowledge are contradictory, std::nullopt is returned.
+  static std::optional<ValueKnowledge> meet(const ValueKnowledge &lhs,
+                                            const ValueKnowledge &rhs) {
     if (!lhs.isInitialized)
       return lhs;
     if (!rhs.isInitialized)
       return rhs;
 
-    Optional<ValueKnowledge> knowledge = meetTypes(lhs, rhs);
+    std::optional<ValueKnowledge> knowledge = meetTypes(lhs, rhs);
 
     if (!knowledge.has_value())
-      return None;
+      return std::nullopt;
     ValueKnowledge result = knowledge.value();
 
-    Optional<OptionalKnowledge> optional =
+    std::optional<OptionalKnowledge> optional =
         meetOptionalKnowledge(lhs.optional, rhs.optional);
     if (!optional.has_value())
-      return None;
+      return std::nullopt;
     result.optional = optional.value();
     return result;
   }
 
-  static Optional<ValueKnowledge> meetTypes(const ValueKnowledge &lhs,
-                                            const ValueKnowledge &rhs) {
+  static std::optional<ValueKnowledge> meetTypes(const ValueKnowledge &lhs,
+                                                 const ValueKnowledge &rhs) {
     if (!lhs.isInitialized)
       return lhs;
     if (!rhs.isInitialized)
@@ -362,7 +362,7 @@ struct ValueKnowledge {
       return rhs;
     if (lhs == rhs)
       return lhs;
-    return None;
+    return std::nullopt;
   }
 
   // We start in the uninitialized state by default.
@@ -449,8 +449,8 @@ private:
   void visitAtenArangeStartStepOp(AtenArangeStartStepOp op);
   void visitAtenArangeStartOp(AtenArangeStartOp op);
   void visitAtenArangeOp(AtenArangeOp op);
-  void visitAtenArangeLikeOpHelper(Operation *op, llvm::Optional<Value> start,
-                                   Value end, llvm::Optional<Value> step,
+  void visitAtenArangeLikeOpHelper(Operation *op, std::optional<Value> start,
+                                   Value end, std::optional<Value> step,
                                    Value dtype);
   void visitReductionAlongAllDimsOp(Operation *op, Type dtype,
                                     ArrayRef<const ValueState *> operands);
@@ -464,7 +464,7 @@ private:
   template <typename OpTy> void visitScalarToTensorConversionOp(OpTy op);
   void visitAtenTensorOp(AtenTensorOp op);
   template <typename OpTy>
-  void visitConstantTensorAllocOp(OpTy op, llvm::Optional<Type> dataType);
+  void visitConstantTensorAllocOp(OpTy op, std::optional<Type> dataType);
   template <typename OpTy>
   void visitConstantTensorAllocLikeOp(OpTy op,
                                       ArrayRef<const ValueState *> operands);
@@ -518,7 +518,7 @@ updateResultTypeState(Type scalarType,
 // unknown (None variant of the optional).
 static torch_upstream::ResultTypeState
 updateResultTypeState(const ValueKnowledge *tensor,
-                      Optional<bool> rankIsNonZero,
+                      std::optional<bool> rankIsNonZero,
                       const torch_upstream::ResultTypeState &inState,
                       bool skipRankCheck = false) {
   if (!rankIsNonZero.has_value() && !skipRankCheck)
@@ -559,21 +559,22 @@ static Type getPromotedResultDType(ValueKnowledge *tensor, Type scalarType) {
   torch_upstream::ResultTypeState state = {};
   // No need to check if rank is zero for tensor because scalar uses
   // wrappedResult which is a lower priority than both dimResult and zeroResult.
-  state = updateResultTypeState(tensor, /*rankIsNonZero=*/None, state,
+  state = updateResultTypeState(tensor, /*rankIsNonZero=*/std::nullopt, state,
                                 /*skipRankCheck=*/true);
   state =
       updateResultTypeState(getDefaultDtypeForTorchScalar(scalarType), state);
   return getTypeForScalarType(scalarType.getContext(), result_type(state));
 }
 
-static SmallVector<Optional<bool>> getRankIsNonZeroArray(ValueRange values) {
-  SmallVector<Optional<bool>> rankIsNonZero;
+static SmallVector<std::optional<bool>>
+getRankIsNonZeroArray(ValueRange values) {
+  SmallVector<std::optional<bool>> rankIsNonZero;
   for (Value v : values) {
     if (auto tensorType = v.getType().dyn_cast<BaseTensorType>()) {
       if (tensorType.hasSizes()) {
         rankIsNonZero.push_back(tensorType.getSizes().size() != 0);
       } else {
-        rankIsNonZero.push_back(None);
+        rankIsNonZero.push_back(std::nullopt);
       }
     }
   }
@@ -588,13 +589,13 @@ static SmallVector<Optional<bool>> getRankIsNonZeroArray(ValueRange values) {
 // Returns most generic type Type() if the tensor dtype is unknown.
 static Type getPromotedResultType(MLIRContext *context,
                                   ArrayRef<const ValueKnowledge *> tensors,
-                                  ArrayRef<Optional<bool>> rankIsNonZero,
+                                  ArrayRef<std::optional<bool>> rankIsNonZero,
                                   bool skipRankCheck = false) {
   torch_upstream::ResultTypeState state = {};
   assert(tensors.size() == rankIsNonZero.size());
   for (auto t : llvm::zip(tensors, rankIsNonZero)) {
     const ValueKnowledge *tensor = std::get<0>(t);
-    Optional<bool> rankIsNonZero = std::get<1>(t);
+    std::optional<bool> rankIsNonZero = std::get<1>(t);
     if (!tensor->dtype)
       return Type();
     state = updateResultTypeState(tensor, rankIsNonZero, state, skipRankCheck);
@@ -604,7 +605,7 @@ static Type getPromotedResultType(MLIRContext *context,
 
 static Type getPromotedResultTypeAssumingNonZeroRank(
     MLIRContext *context, ArrayRef<const ValueKnowledge *> tensors) {
-  SmallVector<Optional<bool>> rankIsNonZero(tensors.size(), true);
+  SmallVector<std::optional<bool>> rankIsNonZero(tensors.size(), true);
   return getPromotedResultType(context, tensors, rankIsNonZero,
                                /*skipRankCheck=*/true);
 }
@@ -662,17 +663,17 @@ void TypeAnalysis::visitOperation(Operation *op,
           AtenSliceScatterOp, AtenGatherOp, AtenExpandOp, AtenExpandAsOp,
           AtenBroadcastToOp, AtenRepeatOp, AtenConstantPadNdOp, AtenPadOp,
           AtenZero_Op, AtenIndexTensorOp, Aten_IndexPutImplOp, AtenIndexPutOp,
-          AtenCopyOp, AtenZeroOp, AtenIndexPutHackedTwinOp,
+          AtenCopyOp, AtenZeroOp, AtenIndexPutHackedTwinOp, AtenPreluOp,
           AtenMaskedFillScalarOp, AtenFlipOp, PrimAbsScalarOp, AtenNumpyTOp,
           AtenTriuOp, AtenMaskedFillTensorOp, AtenRollOp, AtenPowTensorTensorOp,
           AtenLiftFreshCopyOp, AtenIndexTensorHackedTwinOp,
           AtenUpsampleNearest2dOp, AtenMishOp, AtenRoundOp, AtenFillTensorOp,
-          AtenUpsampleNearest2dBackwardOp>(op)) {
+          AtenUpsampleNearest2dBackwardOp, AtenLeakyReluBackwardOp>(op)) {
     return incorporateKnowledge(op->getResult(0), operands[0]->getValue());
   }
 
   // Dtype is always float32, except for bfloat16, float16, float64 and nullptr.
-  if (isa<AtenExpOp, AtenExpm1Op, AtenSinOp, AtenCosOp, AtenSigmoidOp,
+  if (isa<AtenTanhOp, AtenExpOp, AtenSinOp, AtenCosOp, AtenSigmoidOp,
           AtenReciprocalOp, AtenLogOp, AtenSqrtOp, AtenLog2Op, AtenLog1pOp,
           AtenRsqrtOp, AtenErfOp, AtenSoftplusOp, AtenFrobeniusNormDimOp>(op)) {
     ValueKnowledge knowledge =
@@ -700,7 +701,8 @@ void TypeAnalysis::visitOperation(Operation *op,
   // Dtype is always i1.
   if (isa<AtenEqScalarOp, AtenGeScalarOp, AtenGtScalarOp, AtenLtScalarOp,
           AtenLeScalarOp, AtenNeScalarOp, AtenAnyOp, AtenAllOp, AtenEqTensorOp,
-          AtenGtTensorOp, AtenLtTensorOp, AtenLogicalOrOp>(op)) {
+          AtenGtTensorOp, AtenLtTensorOp, AtenLogicalOrOp, AtenLogicalAndOp,
+          AtenLogicalXorOp, AtenLogicalNotOp>(op)) {
     auto knowledge =
         ValueKnowledge::getTensorPessimisticValueState(op->getContext());
     knowledge.dtype = IntegerType::get(op->getContext(), 1);
@@ -975,8 +977,8 @@ void TypeAnalysis::visitOperation(Operation *op,
     Type dtype = operands[0]->getValue().dtype;
     visitReductionAlongAllDimsOp(op, dtype, operands);
     return;
-  } else if (isa<AtenStdOp, AtenStdDimOp, AtenVarOp, AtenVarDimOp,
-                 AtenVarCorrectionOp>(op)) {
+  } else if (isa<AtenStdOp, AtenStdDimOp, AtenStdCorrectionOp, AtenVarOp,
+                 AtenVarDimOp, AtenVarCorrectionOp>(op)) {
     auto input = operands[0]->getValue();
     visitReductionAlongAllDimsOp(op, input.dtype, operands);
     return;
@@ -1087,7 +1089,7 @@ void TypeAnalysis::visitOperation(Operation *op,
   if (auto embedding = dyn_cast<AtenEmbeddingOp>(op)) {
     auto knowledge =
         ValueKnowledge::getTensorPessimisticValueState(op->getContext());
-    knowledge.dtype = Float32Type::get(op->getContext());
+    knowledge.dtype = operands[0]->getValue().dtype;
     incorporateKnowledge(embedding.getResult(), knowledge);
     return;
   }
@@ -1232,9 +1234,9 @@ void TypeAnalysis::visitAtenEmbeddingBagOp(Operation *op) {
 
 // Arange like ops returns a 1-D tensor of size ceil(end - start).
 void TypeAnalysis::visitAtenArangeLikeOpHelper(Operation *op,
-                                               llvm::Optional<Value> start,
+                                               std::optional<Value> start,
                                                Value end,
-                                               llvm::Optional<Value> step,
+                                               std::optional<Value> step,
                                                Value dtype) {
   auto knowledge =
       ValueKnowledge::getTensorPessimisticValueState(op->getContext());
@@ -1343,7 +1345,7 @@ void TypeAnalysis::visitAtenTensorOp(AtenTensorOp op) {
 
 template <typename OpTy>
 void TypeAnalysis::visitConstantTensorAllocOp(OpTy op,
-                                              llvm::Optional<Type> dataType) {
+                                              std::optional<Type> dataType) {
   auto knowledge =
       ValueKnowledge::getTensorPessimisticValueState(op->getContext());
   if (!dataType)

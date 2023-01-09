@@ -447,8 +447,44 @@ public:
     return success();
   }
 };
-
 } // namespace
+
+// Binary op legalizations for Logical And/Or/Xor.
+namespace {
+template <typename AtenOpT, typename ChloOpT>
+class ConvertAtenLogicalBinaryOp : public OpConversionPattern<AtenOpT> {
+public:
+  using OpConversionPattern<AtenOpT>::OpConversionPattern;
+  using OpAdaptor = typename AtenOpT::Adaptor;
+
+  LogicalResult
+  matchAndRewrite(AtenOpT op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    TensorType outType = OpConversionPattern<AtenOpT>::getTypeConverter()
+                             ->convertType(op.getType())
+                             .template cast<TensorType>();
+    Value lhs = mhlo::promoteType(rewriter, adaptor.getSelf(), outType);
+    Value rhs = mhlo::promoteType(rewriter, adaptor.getOther(), outType);
+
+    DenseIntElementsAttr bcastDimensions;
+    rewriter.replaceOpWithNewOp<ChloOpT>(op, outType, lhs, rhs,
+                                         bcastDimensions);
+    return success();
+  }
+};
+} // namespace
+
+// AtenLogicalNotOp
+template <>
+LogicalResult ConvertAtenOp<AtenLogicalNotOp>::matchAndRewrite(
+    AtenLogicalNotOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+  TensorType outType =
+      getTypeConverter()->convertType(op.getType()).cast<TensorType>();
+  Value self = mhlo::promoteType(rewriter, adaptor.getSelf(), outType);
+  rewriter.replaceOpWithNewOp<mhlo::NotOp>(op, outType, self);
+  return success();
+}
 
 // AtenTransposeIntOp
 namespace {
@@ -1246,6 +1282,80 @@ LogicalResult ConvertAtenOp<AtenArangeStartStepOp>::matchAndRewrite(
   return success();
 }
 
+template <>
+LogicalResult ConvertAtenOp<AtenGeluBackwardOp>::matchAndRewrite(
+    AtenGeluBackwardOp op, OpAdaptor adaptor,
+    ConversionPatternRewriter &rewriter) const {
+  Location loc = op.getLoc();
+  Value input = adaptor.getSelf();
+  auto outType = this->getTypeConverter()
+                     ->convertType(op.getType())
+                     .cast<TensorType>();
+  if (!outType) {
+    return op.emitError("only tensor type is supported");
+  }
+  // TODO: Handle approximate.
+  std::string approximate;
+  if (!matchPattern(op.getApproximate(), m_TorchConstantStr(approximate)) ||
+      approximate != "none") {
+    return rewriter.notifyMatchFailure(op, "Unsupported value of approximate");
+  }
+  // Create constant value
+  Value kAlpha =
+      chlo::getConstantLike(rewriter, loc, 0.70710678118654752440, input);
+  Value cstAlpha0 =
+      chlo::getConstantLike(rewriter, loc, 1.12837916709551257390, input);
+  Value half = chlo::getConstantLike(rewriter, loc, .5, input);
+  Value one = chlo::getConstantLike(rewriter, loc, 1.0, input);
+  Value negHalf = chlo::getConstantLike(rewriter, loc, -0.5, input);
+
+  // Compute
+  Value kBeta0 = rewriter.create<mhlo::MulOp>(loc, outType, kAlpha, cstAlpha0);
+  Value kBeta = rewriter.create<mhlo::MulOp>(loc, outType, kBeta0, half);
+  Value erfArg =
+      rewriter.create<mhlo::MulOp>(loc, outType, kAlpha, adaptor.getSelf());
+  Value erf = rewriter.create<mlir::chlo::ErfOp>(loc, outType, erfArg);
+  Value erfAdd = rewriter.create<mhlo::AddOp>(loc, outType, erf, one);
+  Value cdf = rewriter.create<mhlo::MulOp>(loc, outType, erfAdd, half);
+  Value inputSquared = rewriter.create<mhlo::MulOp>(
+      loc, outType, adaptor.getSelf(), adaptor.getSelf());
+  Value negHalfInputSquared =
+      rewriter.create<mhlo::MulOp>(loc, outType, inputSquared, negHalf);
+  Value expRes =
+      rewriter.create<mhlo::ExpOp>(loc, outType, negHalfInputSquared);
+  Value pdf = rewriter.create<mhlo::MulOp>(loc, outType, kBeta, expRes);
+  Value pdfTimesInput =
+      rewriter.create<mhlo::MulOp>(loc, outType, pdf, adaptor.getSelf());
+  Value pdfTimesInputAddCdf =
+      rewriter.create<mhlo::AddOp>(loc, outType, pdfTimesInput, cdf);
+  rewriter.replaceOpWithNewOp<mhlo::MulOp>(op, outType, adaptor.getGradOutput(),
+                                           pdfTimesInputAddCdf);
+  return success();
+}
+
+// RuntimeAssertOp
+namespace {
+class ConvertRuntimeAssertOp : public OpConversionPattern<RuntimeAssertOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(RuntimeAssertOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    bool condition;
+    if (!matchPattern(op.getCondition(), m_TorchConstantBool(&condition))) {
+      return rewriter.notifyMatchFailure(
+          op, "unimplemented: condition must be a constant");
+    }
+    if (!condition) {
+      return op->emitError("condition must be true");
+    }
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+} // namespace
+
 void mlir::torch::torch_to_mhlo::populateBasicOpPatternsAndLegality(
     TypeConverter &typeConverter, RewritePatternSet &patterns,
     ConversionTarget &target, const TorchToMhloOptions &options) {
@@ -1253,6 +1363,8 @@ void mlir::torch::torch_to_mhlo::populateBasicOpPatternsAndLegality(
 
   target.addIllegalOp<AtenTransposeIntOp>();
   patterns.add<ConvertAtenTransposeIntOp>(typeConverter, context);
+  target.addIllegalOp<RuntimeAssertOp>();
+  patterns.add<ConvertRuntimeAssertOp>(typeConverter, context);
 
 #define INSERT_UNARY_FPONLY_PATTERN(AtenOp, MhloOp)                            \
   target.addIllegalOp<AtenOp>();                                               \
@@ -1262,6 +1374,8 @@ void mlir::torch::torch_to_mhlo::populateBasicOpPatternsAndLegality(
   INSERT_UNARY_FPONLY_PATTERN(AtenCloneOp, mhlo::CopyOp);
   INSERT_UNARY_FPONLY_PATTERN(AtenSqrtOp, mhlo::SqrtOp);
   INSERT_UNARY_FPONLY_PATTERN(AtenNegOp, mhlo::NegOp);
+  INSERT_UNARY_FPONLY_PATTERN(AtenRsqrtOp, mhlo::RsqrtOp);
+  INSERT_UNARY_FPONLY_PATTERN(AtenSigmoidOp, mhlo::LogisticOp);
 #undef INSERT_UNARY_FPONLY_PATTERN
 
 #define INSERT_CONSTANT_FILL_PATTERN(AtenOp, fillVal)                          \
@@ -1311,6 +1425,16 @@ void mlir::torch::torch_to_mhlo::populateBasicOpPatternsAndLegality(
   INSERT_BINARY_COMPARE_PATTERN(AtenNeScalarOp);
 #undef INSERT_BINARY_COMPARE_PATTERN
 
+#define INSERT_BINARY_LOGICAL_PATTERN(AtenOp, ChloOp)                          \
+  target.addIllegalOp<AtenOp>();                                               \
+  patterns.add<ConvertAtenLogicalBinaryOp<AtenOp, ChloOp>>(typeConverter,      \
+                                                           context)
+
+  INSERT_BINARY_LOGICAL_PATTERN(AtenLogicalOrOp, chlo::BroadcastOrOp);
+  INSERT_BINARY_LOGICAL_PATTERN(AtenLogicalAndOp, chlo::BroadcastAndOp);
+  INSERT_BINARY_LOGICAL_PATTERN(AtenLogicalXorOp, chlo::BroadcastXorOp);
+#undef INSERT_BINARY_LOGICAL_PATTERN
+
 #define INSERT_ATENOP_PATTERN(AtenOp)                                          \
   target.addIllegalOp<AtenOp>();                                               \
   patterns.add<ConvertAtenOp<AtenOp>>(typeConverter, context, options)
@@ -1323,10 +1447,12 @@ void mlir::torch::torch_to_mhlo::populateBasicOpPatternsAndLegality(
   INSERT_ATENOP_PATTERN(AtenReciprocalOp);
   INSERT_ATENOP_PATTERN(PrimNumToTensorScalarOp);
   INSERT_ATENOP_PATTERN(AtenContiguousOp);
+  INSERT_ATENOP_PATTERN(AtenLogicalNotOp);
 
   INSERT_ATENOP_PATTERN(AtenReluOp);
   INSERT_ATENOP_PATTERN(AtenGeluOp);
   INSERT_ATENOP_PATTERN(AtenErfOp);
+  INSERT_ATENOP_PATTERN(AtenGeluBackwardOp);
 
   INSERT_ATENOP_PATTERN(AtenCatOp);
   INSERT_ATENOP_PATTERN(AtenClampOp);

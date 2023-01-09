@@ -262,6 +262,9 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
             "aten::bitwise_not : (Tensor) -> (Tensor)",
             "aten::div.Tensor : (Tensor, Tensor) -> (Tensor)",
             "aten::logical_or : (Tensor, Tensor) -> (Tensor)",
+            "aten::logical_and : (Tensor, Tensor) -> (Tensor)",
+            "aten::logical_xor : (Tensor, Tensor) -> (Tensor)",
+            "aten::logical_not : (Tensor) -> (Tensor)",
             "aten::lerp.Tensor : (Tensor, Tensor, Tensor) -> (Tensor)",
             "aten::eq.Tensor : (Tensor, Tensor) -> (Tensor)",
             "aten::gt.Tensor : (Tensor, Tensor) -> (Tensor)",
@@ -320,6 +323,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::threshold_backward : (Tensor, Tensor, Scalar) -> (Tensor)")
     emit("aten::floor_divide : (Tensor, Tensor) -> (Tensor)")
     emit("aten::softplus : (Tensor, Scalar, Scalar) -> (Tensor)")
+    emit("aten::prelu : (Tensor, Tensor) -> (Tensor)")
 
     # Random number generation
     emit_with_mutating_variants("aten::uniform : (Tensor, float, float, Generator?) -> (Tensor)")
@@ -405,6 +409,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::mean : (Tensor, int?) -> (Tensor)")
     emit("aten::std : (Tensor, bool) -> (Tensor)")
     emit("aten::std.dim : (Tensor, int[]?, bool, bool) -> (Tensor)")
+    emit("aten::std.correction : (Tensor, int[]?, int?, bool) -> (Tensor)")
     emit("aten::var : (Tensor, bool) -> (Tensor)")
     emit("aten::var.dim : (Tensor, int[]?, bool, bool) -> (Tensor)")
     emit("aten::var.correction : (Tensor, int[]?, int?, bool) -> (Tensor)")
@@ -511,6 +516,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::full : (int[], Scalar, int?, int?, Device?, bool?) -> (Tensor)")
     emit("aten::full_like : (Tensor, Scalar, int?, int?, Device?, bool?, int?) -> (Tensor)")
     emit_with_mutating_variants("aten::baddbmm : (Tensor, Tensor, Tensor, Scalar, Scalar) -> (Tensor)")
+    emit("aten::fft_fft : (Tensor, int?, int, str?) -> (Tensor)")
 
     # Functionalization ops
     emit("aten::alias_copy : (Tensor) -> (Tensor)")
@@ -635,6 +641,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::embedding_dense_backward : (Tensor, Tensor, int, int, bool) -> (Tensor)")
     emit("aten::native_batch_norm_backward : (Tensor, Tensor, Tensor?, Tensor?, Tensor?, Tensor?, Tensor?, bool, float, bool[]) -> (Tensor, Tensor, Tensor)")
     emit("aten::native_dropout_backward : (Tensor, Tensor, float) -> (Tensor)")
+    emit("aten::leaky_relu_backward : (Tensor, Tensor, Scalar, bool) -> (Tensor)")
 
     # ==========================================================================
     # `prim::` namespace.

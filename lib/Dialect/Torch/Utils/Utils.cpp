@@ -23,14 +23,14 @@ bool Torch::isValidDim(int64_t dim, int64_t inputRank) {
   return dim >= 0 && dim < inputRank;
 }
 
-llvm::Optional<int64_t>
+std::optional<int64_t>
 Torch::matchLegalConstantIndexIntoListOfSize(Value v, int64_t length) {
   int64_t dim;
   if (!matchPattern(v, m_TorchConstantInt(&dim)))
-    return llvm::None;
+    return std::nullopt;
   dim = toPositiveDim(dim, length);
   if (!isValidDim(dim, length))
-    return llvm::None;
+    return std::nullopt;
   return dim;
 }
 
@@ -61,6 +61,15 @@ torch_upstream::ScalarType Torch::getScalarTypeForType(Type type) {
     return torch_upstream::ScalarType::Byte;
   if (type.isSignedInteger(8))
     return torch_upstream::ScalarType::Char;
+  if (type.isa<ComplexType>()) {
+    mlir::Type complexElemType = type.cast<ComplexType>().getElementType();
+    if (complexElemType.isF32())
+      return torch_upstream::ScalarType::ComplexHalf;
+    if (complexElemType.isF64())
+      return torch_upstream::ScalarType::ComplexFloat;
+    if (complexElemType.isF128())
+      return torch_upstream::ScalarType::ComplexDouble;
+  }
   llvm::report_fatal_error("unhandled type for getScalarTypeForType");
 }
 
@@ -95,8 +104,14 @@ Type Torch::getTypeForScalarType(
   case torch_upstream::ScalarType::Byte:
   case torch_upstream::ScalarType::Char:
     return mlir::IntegerType::get(context, 8, signedness);
+  case torch_upstream::ScalarType::ComplexHalf:
+    return mlir::ComplexType::get(Float32Type::get(context));
+  case torch_upstream::ScalarType::ComplexFloat:
+    return mlir::ComplexType::get(Float64Type::get(context));
+  case torch_upstream::ScalarType::ComplexDouble:
+    return mlir::ComplexType::get(Float128Type::get(context));
   default:
-    return Type();
+    llvm::report_fatal_error("unhandled type for getTypeForScalarType");
   }
 }
 
@@ -166,10 +181,10 @@ bool Torch::isBuiltInType(Type type) {
   return isa<BuiltinDialect>(type.getDialect());
 }
 
-Optional<unsigned> Torch::getTensorRank(Value tensor) {
+std::optional<unsigned> Torch::getTensorRank(Value tensor) {
   BaseTensorType tensorType = tensor.getType().cast<BaseTensorType>();
   if (!tensorType.hasSizes())
-    return llvm::None;
+    return std::nullopt;
   return tensorType.getSizes().size();
 }
 

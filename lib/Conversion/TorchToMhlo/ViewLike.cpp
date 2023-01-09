@@ -109,9 +109,9 @@ Value getDynamicSliceInternal(PatternRewriter &rewriter, Operation *op,
 // endIndex(default to dimSize), and step(default to 1) can be optional.
 FailureOr<Value> getDynamicSlice(PatternRewriter &rewriter, Operation *op,
                                  Type outTy, Value input,
-                                 llvm::Optional<Value> startIndexOpt,
-                                 llvm::Optional<Value> endIndexOpt,
-                                 llvm::Optional<Value> stepOpt, int64_t dim,
+                                 std::optional<Value> startIndexOpt,
+                                 std::optional<Value> endIndexOpt,
+                                 std::optional<Value> stepOpt, int64_t dim,
                                  size_t dimSizeIndexBits) {
   auto loc = op->getLoc();
   auto inputTy = input.getType().dyn_cast<RankedTensorType>();
@@ -267,17 +267,17 @@ LogicalResult ConvertAtenOp<AtenSliceTensorOp>::matchAndRewrite(
     return rewriter.notifyMatchFailure(
         op, "only constant dim is currently supported");
 
-  auto getOptionalVal = [&](Value val) -> llvm::Optional<Value> {
+  auto getOptionalVal = [&](Value val) -> std::optional<Value> {
     if (val.getType().isa<Torch::NoneType>()) {
-      return llvm::None;
+      return std::nullopt;
     } else {
       return val;
     }
   };
 
-  llvm::Optional<Value> start = getOptionalVal(adaptor.getStart());
-  llvm::Optional<Value> end = getOptionalVal(adaptor.getEnd());
-  llvm::Optional<Value> step = getOptionalVal(adaptor.getStep());
+  std::optional<Value> start = getOptionalVal(adaptor.getStart());
+  std::optional<Value> end = getOptionalVal(adaptor.getEnd());
+  std::optional<Value> step = getOptionalVal(adaptor.getStep());
 
   FailureOr<Value> sliceInfo =
       getDynamicSlice(rewriter, op, outTy, self, start, end, step, dim,
