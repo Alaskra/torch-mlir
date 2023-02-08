@@ -66,12 +66,11 @@ static void widenConvLayer(MLIRContext *context, Operation *f) {
   biasVec.push_back(biasVec[0]);
   biasVec.push_back(biasVec[1]);
   // create a constant tensor of float type by `shape` and `biasVec`
-  auto resultTensorType = ValueTensorType::get(
-      context, llvm::makeArrayRef(shape), builder.getF32Type());
+  auto resultTensorType = ValueTensorType::get(context, llvm::ArrayRef(shape),
+                                               builder.getF32Type());
   auto dense = mlir::DenseElementsAttr::get(
-      mlir::RankedTensorType::get(llvm::makeArrayRef(shape),
-                                  builder.getF32Type()),
-      llvm::makeArrayRef(biasVec));
+      mlir::RankedTensorType::get(llvm::ArrayRef(shape), builder.getF32Type()),
+      llvm::ArrayRef(biasVec));
   rewriter.replaceOpWithNewOp<ValueTensorLiteralOp>(oldBiasOp, resultTensorType,
                                                     dense);
   // widen conv kernel
@@ -89,12 +88,11 @@ static void widenConvLayer(MLIRContext *context, Operation *f) {
                    kernelVec.begin() + channelSize);
   kernelVec.insert(kernelVec.end(), kernelVec.begin() + channelSize,
                    kernelVec.begin() + 2 * channelSize);
-  resultTensorType = ValueTensorType::get(context, llvm::makeArrayRef(shape),
+  resultTensorType = ValueTensorType::get(context, llvm::ArrayRef(shape),
                                           builder.getF32Type());
   dense = mlir::DenseElementsAttr::get(
-      mlir::RankedTensorType::get(llvm::makeArrayRef(shape),
-                                  builder.getF32Type()),
-      llvm::makeArrayRef(kernelVec));
+      mlir::RankedTensorType::get(llvm::ArrayRef(shape), builder.getF32Type()),
+      llvm::ArrayRef(kernelVec));
   rewriter.replaceOpWithNewOp<ValueTensorLiteralOp>(oldKernelOp,
                                                     resultTensorType, dense);
 
@@ -108,8 +106,8 @@ static void widenConvLayer(MLIRContext *context, Operation *f) {
             op->getResult(0).getType().dyn_cast<ValueTensorType>()) {
       shape = tensorTy.getSizes().vec();
       shape[1] += 3;
-      resultTensorType = ValueTensorType::get(
-          context, llvm::makeArrayRef(shape), builder.getF32Type());
+      resultTensorType = ValueTensorType::get(context, llvm::ArrayRef(shape),
+                                              builder.getF32Type());
       op->getResult(0).setType(resultTensorType);
     }
   }
@@ -143,12 +141,11 @@ static void widenConvLayer(MLIRContext *context, Operation *f) {
     newKernelVec.insert(newKernelVec.end(), kernelVec.begin() + base + hwSize,
                         kernelVec.begin() + base + 2 * hwSize);
   }
-  resultTensorType = ValueTensorType::get(context, llvm::makeArrayRef(shape),
+  resultTensorType = ValueTensorType::get(context, llvm::ArrayRef(shape),
                                           builder.getF32Type());
   dense = mlir::DenseElementsAttr::get(
-      mlir::RankedTensorType::get(llvm::makeArrayRef(shape),
-                                  builder.getF32Type()),
-      llvm::makeArrayRef(newKernelVec));
+      mlir::RankedTensorType::get(llvm::ArrayRef(shape), builder.getF32Type()),
+      llvm::ArrayRef(newKernelVec));
   rewriter.replaceOpWithNewOp<ValueTensorLiteralOp>(oldKernelOp,
                                                     resultTensorType, dense);
 }
