@@ -29,16 +29,10 @@ static void widenConvLayer(MLIRContext *context, Operation *f) {
   // this demo only widen first two convolution by adding three channels
   // copy channel 0 and channel 1 to new channels
 
-  // get operations between first two convolution(include convolution)
-  // make sure the first and last op in opWorklist is conv, and the result shape
-  // of ops in the middle is NCHW
+  // get operations between first two convolution(include convolutions)
   llvm::SmallPtrSet<mlir::Operation *, 16> opWorklist;
   bool flag = false;
   f->walk([&](mlir::Operation *op) {
-    //      if
-    //      (op->getResult(0).getType().dyn_cast_or_null<ValueTensorType>())
-    // above cause coredump, maybe mlir bug
-    // so delay this judgement logic
     if (llvm::dyn_cast<AtenConvolutionOp>(op)) {
       flag = !flag;
       opWorklist.insert(op);
