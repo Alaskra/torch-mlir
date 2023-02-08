@@ -26,6 +26,11 @@ TORCHDYNAMO_XFAIL_SET = {
     # https://github.com/pytorch/pytorch/issues/89629
     "ConvolutionBackwardModule2DPadded_basic",
     "ConvolutionBackwardModule2D_basic",
+
+    # error: 'tensor.expand_shape' op expected dimension 0 of collapsed type to be dynamic since one or more of the corresponding dimensions in the expanded type is dynamic
+    # https://github.com/llvm/torch-mlir/issues/1859
+    "ConvolutionModule2DGroups_basic",
+
     # RuntimeError: Index tensor must have the same number of dimensions as self tensor
     # RuntimeError: Failed running call_function aten.nll_loss_backward(...
     # https://github.com/pytorch/pytorch/issues/89630
@@ -66,8 +71,6 @@ TORCHDYNAMO_XFAIL_SET = {
     "IndexPutImpl2DFloatNonAccumulateModule_basic",
     "IndexPutImpl3DFloatAccumulateModule_basic",
     "IndexPutImpl3DFloatNonAccumulateModule_basic",
-    # %4 = torch.operator "aten.squeeze_.dim"(%3, %int0) : (!torch.tensor<*,f32>, !torch.int) -> !torch.tensor
-    "Matmul_vecmat",
 
     # https://github.com/llvm/torch-mlir/issues/1611
     # error: 'tensor.cast' op operand type 'tensor<0xi64>' and result type 'tensor<18xi64>' are cast incompatible
@@ -85,10 +88,15 @@ TORCHDYNAMO_XFAIL_SET = {
     "ElementwisePreluModule_basic",
     # error: op lowering missing. Issue: https://github.com/llvm/torch-mlir/issues/1792
     "StdCorrectionKeepDimModule_basic",
+
+    #ERROR: value (Tensor with shape=[2, 3, 6, 10], dtype=torch.float32, min=-1.336e-32, max=+0.9152, mean=+0.4837) is not close to golden value (Tensor with shape=[2, 3, 6, 10], dtype=torch.float32, min=+0.02233, max=+0.9152, mean=+0.4777)
+    "UpSampleNearest2dDynamicFactor_basic",
 }
 
-MHLO_PASS_SET = {
+STABLEHLO_PASS_SET = {
     "AdaptiveAvgPool2dNonUnitOutputSizeStaticModule_basic",
+    "AddSizeIntModule_basic",
+    "AddSizeIntNegDimModule_basic",
     "ArangeDtypeFloatModule_basic",
     "ArangeDtypeIntModule_basic",
     "ArangeFalsePinMemoryModule_basic",
@@ -103,10 +111,15 @@ MHLO_PASS_SET = {
     "ArangeStartStepFloatModule_basic",
     "ArangeStartStepIntModule_basic",
     "ArangeZeroElementOutputModule_basic",
+    "BatchMlpLayerModule_basic",
     "BmmModule_basic",
     "BroadcastToModule_basic",
     "BroadcastToSameRankStaticModule_basic",
     "BroadcastZeroRankInputStaticModule_basic",
+    "BucketizeTensorStaticFloatModule_basic",
+    "BucketizeTensorStaticModule_basic",
+    "CumsumStaticModule_basic",
+    "CumsumStaticNegativeDimModule_basic",
     "ElementwiseAtenLogicalAndOpPromoteBroadcastStaticShapeModule_basic",
     "ElementwiseAtenLogicalNotOpModule_basic",
     "ElementwiseAtenLogicalNotOpPromoteModule_basic",
@@ -122,12 +135,19 @@ MHLO_PASS_SET = {
     "ElementwiseClampMinModule_basic",
     "ElementwiseClampMaxModule_basic",
     "ElementwiseExpModule_basic",
+    "ElementwiseFlattenBroadcastModule_basic",
+    "ElementwiseLeakyReluModule_basic",
     "ElementwiseLogModule_basic",
     "ElementwiseNegModule_basic",
     "ElementwiseRsqrtModule_basic",
     "ElementwiseSigmoidModule_basic",
     "ElementwiseSqrtModule_basic",
+    "ElementwiseSinModule_basic",
+    "ElementwiseCosModule_basic",
+    "ElementwiseCeilModule_basic",
+    "ElementwiseFloorModule_basic",
     "ElementwiseUnaryModule_basic",
+    "ElementwiseUnsqueezeBroadcastModule_basic",
     "ElementwiseUnsqueezeNegDimsModule_basic",
     "ElementwiseToDtypeF32ToI64Module_basic",
     "ElementwiseAddModule_basic",
@@ -196,6 +216,8 @@ MHLO_PASS_SET = {
     "Gather2DInputModdule_basic",
     "GatherRandomIndexModule_basic",
     "GeluBackwardModule_basic",
+    "HardswishModule_basic",
+    "HardswishRandomModule_basic",
     "HardTanhIntModule_basic",
     "HardTanhModule_basic",
     "HardsigmoidModule_basic",
@@ -218,6 +240,8 @@ MHLO_PASS_SET = {
     "MeanDynamicSizesModule_basic",
     "MeanLargeInputModule_basic",
     "MeanModule_basic",
+    "Mlp1LayerModule_basic",
+    "Mlp2LayerModule_basic",
     "MmTanhModule_basic",
     "Mv_basic",
     "NativeLayerNormModule4D_basic",
@@ -249,6 +273,8 @@ MHLO_PASS_SET = {
     "LiftFreshCopyModule_basic",
     "Mlp2LayerModuleNoBias_basic",
     "NumelModule_basic",
+    "SiluModule_basic",
+    "SquareModule_basic",
     "SqueezeModule_allUnitDim",
     "SqueezeDimModule_unitDim",
     "ViewCollapseOnesMiddleModule_basic",
@@ -268,6 +294,7 @@ MHLO_PASS_SET = {
     "Convolution2DStaticModule_basic",
     "ConvolutionModule2DTransposeStridedStatic_basic",
     "ElementwiseCloneContiguousModule_basic",
+    "ElementwiseCloneChannelsLastMemoryFormatModule_basic",
     "ElementwiseCloneModule_basic",
     "ElementwiseBinaryStaticShapeModule_basic",
     "ReturnThreeTensorFloat32_basic",
@@ -417,12 +444,14 @@ MHLO_PASS_SET = {
     "UnsafeViewDynamicExpandModule_basic",
     "AtenRoundIntModule_basic",
     "TestF16Return_basic",
+    "_LogSoftmaxModuleStable_basic",
 }
 
 # Write the TOSA set as a "passing" set as it is very early in development
 # and very few tests work yet.
 TOSA_PASS_SET = {
     "ElementwiseCloneContiguousModule_basic",
+    "ElementwiseCloneChannelsLastMemoryFormatModule_basic",
     "ElementwiseCloneModule_basic",
     "ElementwiseUnaryModule_basic",
     "ElementwiseBinaryModule_basic",
