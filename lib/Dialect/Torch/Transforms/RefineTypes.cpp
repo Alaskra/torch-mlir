@@ -59,7 +59,6 @@
 #include "mlir/Analysis/DataFlow/ConstantPropagationAnalysis.h"
 #include "mlir/Analysis/DataFlow/DeadCodeAnalysis.h"
 #include "mlir/Analysis/DataFlow/SparseAnalysis.h"
-#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinDialect.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -81,7 +80,9 @@ using namespace mlir::torch::Torch;
 // -----------------------------------------------------------------------------
 
 static Type getTypeForDTypeInteger(MLIRContext *context, int64_t dtypeInt) {
-  return getTypeForScalarType(context, (torch_upstream::ScalarType)dtypeInt);
+  FailureOr<Type> result =
+      getTypeForScalarType(context, (torch_upstream::ScalarType)dtypeInt);
+  return failed(result) ? Type() : *result;
 }
 
 static Type getDtypeOrDefault(MLIRContext *context, Value optionalDtype,
@@ -563,7 +564,9 @@ static Type getPromotedResultDType(ValueKnowledge *tensor, Type scalarType) {
                                 /*skipRankCheck=*/true);
   state =
       updateResultTypeState(getDefaultDtypeForTorchScalar(scalarType), state);
-  return getTypeForScalarType(scalarType.getContext(), result_type(state));
+  FailureOr<Type> result =
+      getTypeForScalarType(scalarType.getContext(), result_type(state));
+  return failed(result) ? Type() : *result;
 }
 
 static SmallVector<std::optional<bool>>
@@ -600,7 +603,8 @@ static Type getPromotedResultType(MLIRContext *context,
       return Type();
     state = updateResultTypeState(tensor, rankIsNonZero, state, skipRankCheck);
   }
-  return getTypeForScalarType(context, result_type(state));
+  FailureOr<Type> result = getTypeForScalarType(context, result_type(state));
+  return failed(result) ? Type() : *result;
 }
 
 static Type getPromotedResultTypeAssumingNonZeroRank(
@@ -675,7 +679,8 @@ void TypeAnalysis::visitOperation(Operation *op,
   // Dtype is always float32, except for bfloat16, float16, float64 and nullptr.
   if (isa<AtenTanhOp, AtenExpOp, AtenSinOp, AtenCosOp, AtenSigmoidOp,
           AtenReciprocalOp, AtenLogOp, AtenSqrtOp, AtenLog2Op, AtenLog1pOp,
-          AtenRsqrtOp, AtenErfOp, AtenSoftplusOp, AtenFrobeniusNormDimOp>(op)) {
+          AtenRsqrtOp, AtenErfOp, AtenSoftplusOp, AtenFrobeniusNormDimOp,
+          PrimsSqrtOp>(op)) {
     ValueKnowledge knowledge =
         ValueKnowledge::getTensorPessimisticValueState(op->getContext());
     Type dtype = operands[0]->getValue().dtype;
@@ -737,7 +742,7 @@ void TypeAnalysis::visitOperation(Operation *op,
   if (isa<AtenAddTensorOp, AtenSubTensorOp, AtenMulTensorOp, AtenDivTensorOp,
           AtenDivTensorModeOp, Aten__And__TensorOp, AtenMinimumOp,
           AtenMaximumOp, AtenBitwiseAndTensorOp, AtenBitwiseOrTensorOp,
-          AtenThresholdBackwardOp>(op)) {
+          AtenBitwiseXorTensorOp, AtenThresholdBackwardOp>(op)) {
     auto knowledge =
         ValueKnowledge::getTensorPessimisticValueState(op->getContext());
     knowledge.dtype = getPromotedResultType(
@@ -978,7 +983,7 @@ void TypeAnalysis::visitOperation(Operation *op,
     visitReductionAlongAllDimsOp(op, dtype, operands);
     return;
   } else if (isa<AtenStdOp, AtenStdDimOp, AtenStdCorrectionOp, AtenVarOp,
-                 AtenVarDimOp, AtenVarCorrectionOp>(op)) {
+                 AtenVarDimOp, AtenVarCorrectionOp, PrimsVarOp>(op)) {
     auto input = operands[0]->getValue();
     visitReductionAlongAllDimsOp(op, input.dtype, operands);
     return;
@@ -1035,8 +1040,15 @@ void TypeAnalysis::visitOperation(Operation *op,
   } else if (auto newEmpty = dyn_cast<AtenNewEmptyOp>(op)) {
     visitConstantTensorNewLikeOp<AtenNewEmptyOp>(newEmpty, operands);
     return;
+  } else if (auto newEmptyStrided = dyn_cast<AtenNewEmptyStridedOp>(op)) {
+    visitConstantTensorNewLikeOp<AtenNewEmptyStridedOp>(newEmptyStrided,
+                                                        operands);
+    return;
   } else if (auto randLike = dyn_cast<AtenRandLikeOp>(op)) {
     visitConstantTensorAllocLikeOp<AtenRandLikeOp>(randLike, operands);
+    return;
+  } else if (auto randLike = dyn_cast<AtenRandnLikeOp>(op)) {
+    visitConstantTensorAllocLikeOp<AtenRandnLikeOp>(randLike, operands);
     return;
   } else if (auto toCopy = dyn_cast<Aten_ToCopyOp>(op)) {
     visitConstantTensorAllocLikeOp<Aten_ToCopyOp>(toCopy, operands);
