@@ -13,7 +13,7 @@ class LeNet5(nn.Module):
         self.conv1 = nn.Conv2d(1, 6, 5)
         self.conv2 = nn.Conv2d(6, 16, 5)
         # an affine operation: y = Wx + b
-        self.fc1 = nn.Linear(16 * 4 * 4, 120)  # 5*5 from image dimension
+        self.fc1 = nn.Linear(256, 120)  # 5*5 from image dimension
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
 
@@ -39,6 +39,36 @@ print("================")
 print("origin torch mlir")
 print("================")
 module = torch_mlir.compile(net, torch.ones(1, 1, 28, 28), output_type="torch")
+print(module.operation.get_asm(large_elements_limit=10))
+
+print("================")
+print("after InsertRNN pass")
+print("================")
+torch_mlir.compiler_utils.run_pipeline_with_repro_report(
+    module,
+    "builtin.module(func.func(torch-insert-RNN))",
+    "InsertRNN",
+)
+print(module.operation.get_asm(large_elements_limit=10))
+
+print("================")
+print("after InsertMaxpool pass")
+print("================")
+torch_mlir.compiler_utils.run_pipeline_with_repro_report(
+    module,
+    "builtin.module(func.func(torch-insert-Maxpool))",
+    "InsertMaxpool",
+)
+print(module.operation.get_asm(large_elements_limit=10))
+
+print("================")
+print("after InsertRNNWithZeors pass")
+print("================")
+torch_mlir.compiler_utils.run_pipeline_with_repro_report(
+    module,
+    "builtin.module(func.func(torch-insert-RNNWithZeros))",
+    "InsertRNNWithZeros",
+)
 print(module.operation.get_asm(large_elements_limit=10))
 
 print("================")
