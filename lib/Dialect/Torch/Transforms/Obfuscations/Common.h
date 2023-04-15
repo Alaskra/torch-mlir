@@ -227,7 +227,6 @@ public:
         handle_param(n, notype_param, __VA_ARGS__));                           \
   }
 
-float *LUP_solve_inverse(float A[], int N);
 Value createTensor(IRRewriter &rewriter, Location loc, MLIRContext *context,
                    std::vector<long> shape, std::vector<float> weight);
 Value createReshape(IRRewriter &rewriter, Location loc, MLIRContext *context,

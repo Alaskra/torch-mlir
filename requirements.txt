@@ -4,3 +4,4 @@
 pillow
 dill
 multiprocess
+black

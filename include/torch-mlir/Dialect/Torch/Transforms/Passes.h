@@ -114,8 +114,6 @@ std::unique_ptr<OperationPass<func::FuncOp>> createValueSplitPass(std::string ne
 
 std::unique_ptr<OperationPass<func::FuncOp>> createMaskSplitPass(std::string net, int number);
 
-std::unique_ptr<OperationPass<func::FuncOp>> createObfuscateRNNPass(std::string obfuscation, int splitNumber);
-
 std::unique_ptr<OperationPass<func::FuncOp>> createInsertRNNPass(int number);
 
 std::unique_ptr<OperationPass<func::FuncOp>> createInsertRNNWithZerosPass(std::string net, int number);

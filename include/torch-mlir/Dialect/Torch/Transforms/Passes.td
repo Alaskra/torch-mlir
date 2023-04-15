@@ -394,21 +394,6 @@ def MaskSplit : Pass<"torch-mask-split", "func::FuncOp"> {
   ];
 }
 
-def ObfuscateRNN : Pass<"torch-obfuscate-rnn", "func::FuncOp"> {
-  let summary = "Insert obfuscate in RNN cell";
-  let constructor = [{
-    mlir::torch::Torch::createObfuscateRNNPass(/*obfuscation=*/"", /*splitNumber=*/2)
-  }];
-  let options = [
-    Option<"obfuscation", "obfuscation", "std::string", /*default=*/"",
-           "obfuscation to apply: valueSplit, maskSplit">,
-    Option<"splitNumber", "splitNumber", "int", /*default=*/"2",
-           "split numbers, only used for valueSplit and maskSplit">
-  ];
-  let description = [{
-  }];
-}
-
 def ReifyShapeCalculations : Pass<"torch-reify-shape-calculations", "ModuleOp"> {
   let summary = "Reify shape calculations.";
   let constructor = "mlir::torch::Torch::createReifyShapeCalculationsPass()";
