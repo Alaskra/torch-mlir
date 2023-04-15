@@ -23,7 +23,7 @@
 
 // **************package frequently-used***************
 // package with func and class
-#include "PassDetail.h"
+#include "../PassDetail.h"
 
 #include "mlir/IR/BuiltinDialect.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
@@ -226,3 +226,11 @@ public:
     return std::make_unique<name##Pass>(                                       \
         handle_param(n, notype_param, __VA_ARGS__));                           \
   }
+
+
+float *LUP_solve_inverse(float A[], int N);
+Value createTensor(IRRewriter &rewriter, Location loc, MLIRContext *context,
+                   std::vector<long> shape, std::vector<float> weight);
+Value createReshape(IRRewriter &rewriter, Location loc, MLIRContext *context,
+                    std::vector<long> shape, Value originVal);
+SmallPtrSet<Operation *, 16> getPositiveLayers(Operation *f);

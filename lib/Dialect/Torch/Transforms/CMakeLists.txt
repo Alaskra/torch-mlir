@@ -1,20 +1,8 @@
+file(GLOB OBF_FILES "Obfuscations/*.cpp")
+
 add_mlir_library(TorchMLIRTorchPasses
   AdjustCallingConventions.cpp
   DecomposeComplexOps.cpp
-  WidenConvLayer.cpp
-  InsertSkip.cpp
-  InsertConv.cpp
-  InsertLinear.cpp
-  ValueSplit.cpp
-  MaskSplit.cpp
-  BranchLayer.cpp
-  InsertSepraConv.cpp
-  Common.cpp
-  ObfuscateRNN.cpp
-  InsertRNN.cpp
-  InsertRNNWithZeros.cpp
-  InsertMaxpool.cpp
-  InsertInception.cpp
   DropAbstractInterpCalculations.cpp
   EraseModuleInitializer.cpp
   Passes.cpp
@@ -33,6 +21,7 @@ add_mlir_library(TorchMLIRTorchPasses
   SimplifyShapeCalculations.cpp
   SimplifyDtypeCalculations.cpp
   SimplifyAbstractInterpCalculationsUtils.cpp
+  ${OBF_FILES}
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/torch-mlir/Dialect/Torch/Transforms

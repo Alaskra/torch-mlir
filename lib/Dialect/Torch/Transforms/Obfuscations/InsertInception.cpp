@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "PassDetail.h"
+#include "Common.h"
 #include <iostream>
 #include <random>
 
@@ -89,7 +89,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
         WeightVec[i] = distribution(generator);
       }
       Value Weight =
-          Torch::createTensor(rewriter, loc, context, shape_weight, WeightVec);
+          createTensor(rewriter, loc, context, shape_weight, WeightVec);
       // bias
       auto shape_bias = convOp.getOperand(2)
                             .getType()
@@ -102,7 +102,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
         BiasVec[i] = distribution(generator);
       }
       Value Bias =
-          Torch::createTensor(rewriter, loc, context, shape_bias, BiasVec);
+          createTensor(rewriter, loc, context, shape_bias, BiasVec);
       Value list_padding = rewriter.create<PrimListConstructOp>(
           loc, ListType::get(IntType::get(context)), ValueRange({int0, int0}));
       values[i + 1] = rewriter.create<AtenConvolutionOp>(
@@ -128,7 +128,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
         WeightVec[i] = distribution(generator);
       }
       Value Weight =
-          Torch::createTensor(rewriter, loc, context, shape_weight, WeightVec);
+          createTensor(rewriter, loc, context, shape_weight, WeightVec);
       // bias
       auto shape_bias = convOp.getOperand(2)
                             .getType()
@@ -141,7 +141,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
         BiasVec[i] = distribution(generator);
       }
       Value Bias =
-          Torch::createTensor(rewriter, loc, context, shape_bias, BiasVec);
+          createTensor(rewriter, loc, context, shape_bias, BiasVec);
       Value list_padding = rewriter.create<PrimListConstructOp>(
           loc, ListType::get(IntType::get(context)), ValueRange({int0, int0}));
       Value randomConv_1 = rewriter.create<AtenConvolutionOp>(
@@ -170,7 +170,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       for (int i = 0; i < weightSize_2; ++i) {
         WeightVec_2[i] = distribution(generator);
       }
-      Weight = Torch::createTensor(rewriter, loc, context, shape_weight_2,
+      Weight = createTensor(rewriter, loc, context, shape_weight_2,
                                    WeightVec_2);
 
       // bias
@@ -179,14 +179,14 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       for (int i = 0; i < shape_bias[0]; ++i) {
         BiasVec_2[i] = distribution(generator);
       }
-      Bias = Torch::createTensor(rewriter, loc, context, shape_bias, BiasVec_2);
+      Bias = createTensor(rewriter, loc, context, shape_bias, BiasVec_2);
       auto shape_conv = shape;
       shape_conv[1] = shape_weight_2[0];
       int conv_size =
           shape_conv[0] * shape_conv[1] * shape_conv[2] * shape_conv[3];
       std::vector<float> zeroConvVec(conv_size);
       Value zeroConv =
-          Torch::createTensor(rewriter, loc, context, shape_conv, zeroConvVec);
+          createTensor(rewriter, loc, context, shape_conv, zeroConvVec);
       Value randomConv_2 = rewriter.create<AtenConvolutionOp>(
           loc, zeroConv.getType(), relu_1, Weight, Bias, list_stride,
           list_padding, list_dilation, constFalse, list, int1);
@@ -237,7 +237,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
         WeightVec[i] = distribution(generator);
       }
       Value Weight =
-          Torch::createTensor(rewriter, loc, context, shape_weight, WeightVec);
+          createTensor(rewriter, loc, context, shape_weight, WeightVec);
       // bias
       auto shape_bias = convOp.getOperand(2)
                             .getType()
@@ -250,14 +250,14 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
         BiasVec[i] = distribution(generator);
       }
       Value Bias =
-          Torch::createTensor(rewriter, loc, context, shape_bias, BiasVec);
+          createTensor(rewriter, loc, context, shape_bias, BiasVec);
       auto shape_conv = shape;
       shape_conv[1] = shape_weight[0];
       int conv_size =
           shape_conv[0] * shape_conv[1] * shape_conv[2] * shape_conv[3];
       std::vector<float> zeroConvVec(conv_size);
       Value zeroConv =
-          Torch::createTensor(rewriter, loc, context, shape_conv, zeroConvVec);
+          createTensor(rewriter, loc, context, shape_conv, zeroConvVec);
       Value randomConv = rewriter.create<AtenConvolutionOp>(
           loc, zeroConv.getType(), maxPool2dOp, Weight, Bias, list_stride,
           list_padding, list_dilation, constFalse, list, int1);

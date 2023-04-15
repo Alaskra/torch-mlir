@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "PassDetail.h"
+#include "Common.h"
 #include <cstdlib>
 #include <ctime>
 

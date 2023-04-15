@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "PassDetail.h"
+#include "Common.h"
 #include <iostream>
 #include <random>
 
@@ -82,14 +82,14 @@ static void insertMaxpool(MLIRContext *context, Operation *f) {
       shape_weight[0] * shape_weight[1] * shape_weight[2] * shape_weight[3];
   std::vector<float> zeroWeightVec(weightSize, 0);
   Value zeroWeight =
-      Torch::createTensor(rewriter, loc, context, shape_weight, zeroWeightVec);
+      createTensor(rewriter, loc, context, shape_weight, zeroWeightVec);
   // bias
   auto shape_bias =
       convOp.getOperand(2).getType().cast<ValueTensorType>().getSizes().vec();
   ;
   std::vector<float> zeroBiasVec(shape_bias[0], 0);
   Value zeroBias =
-      Torch::createTensor(rewriter, loc, context, shape_bias, zeroBiasVec);
+      createTensor(rewriter, loc, context, shape_bias, zeroBiasVec);
   // conv
   Value list = rewriter.create<PrimListConstructOp>(
       loc, ListType::get(IntType::get(context)), ValueRange());
