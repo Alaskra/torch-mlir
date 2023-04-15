@@ -44,16 +44,15 @@ class LeNet(nn.Module):
 
 
 @register_test_case(
-    module_factory=lambda: LeNet(), 
-    passes="func.func(torch-insert-skip{layer=2})"
+    module_factory=lambda: LeNet(), passes="func.func(torch-insert-skip{layer=2})"
 )
 def ObfuscateLeNet_insertSkip(module, tu: TestUtils):
     module.forward(tu.rand(1, 1, 28, 28))
 
 
 @register_test_case(
-    module_factory=lambda: LeNet(), 
-    passes="func.func(torch-widen-conv-layer{layer=1 number=4})"
+    module_factory=lambda: LeNet(),
+    passes="func.func(torch-widen-conv-layer{layer=1 number=4})",
 )
 def ObfuscateLeNet_widenConv(module, tu: TestUtils):
     module.forward(tu.rand(1, 1, 28, 28))
@@ -96,23 +95,28 @@ def ObfuscateLeNet_valueSplit(module, tu: TestUtils):
 def ObfuscateLeNet_maskSplit(module, tu: TestUtils):
     module.forward(tu.rand(1, 1, 28, 28))
 
+
 @register_test_case(
     module_factory=lambda: LeNet(), passes="func.func(torch-insert-RNN{number=5})"
 )
 def ObfuscateLeNet_insertRNN(module, tu: TestUtils):
     module.forward(tu.rand(1, 1, 28, 28))
 
+
 @register_test_case(
-    module_factory=lambda: LeNet(), passes="func.func(torch-insert-RNNWithZeros{activationFunc=tanh number=5})"
+    module_factory=lambda: LeNet(),
+    passes="func.func(torch-insert-RNNWithZeros{activationFunc=tanh number=5})",
 )
 def ObfuscateLeNet_insertRNNWithZeros(module, tu: TestUtils):
     module.forward(tu.rand(1, 1, 28, 28))
+
 
 @register_test_case(
     module_factory=lambda: LeNet(), passes="func.func(torch-insert-Maxpool)"
 )
 def ObfuscateLeNet_insertMaxpool(module, tu: TestUtils):
     module.forward(tu.rand(1, 1, 28, 28))
+
 
 @register_test_case(
     module_factory=lambda: LeNet(), passes="func.func(torch-insert-Inception{number=5})"
@@ -122,16 +126,16 @@ def ObfuscateLeNet_insertInception(module, tu: TestUtils):
 
 
 @register_test_case(
-    module_factory=lambda: LeNet(), 
-    passes="func.func(torch-branch-layer{layer=2 branch=4})"
+    module_factory=lambda: LeNet(),
+    passes="func.func(torch-branch-layer{layer=2 branch=4})",
 )
 def ObfuscateLeNet_branchLayer(module, tu: TestUtils):
     module.forward(tu.rand(1, 1, 28, 28))
 
 
 @register_test_case(
-    module_factory=lambda: LeNet(), 
-    passes="func.func(torch-insert-sepra-conv-layer{layer=2})"
+    module_factory=lambda: LeNet(),
+    passes="func.func(torch-insert-sepra-conv-layer{layer=2})",
 )
 def ObfuscateLeNet_insertSepraConv(module, tu: TestUtils):
     module.forward(tu.rand(1, 1, 28, 28))
