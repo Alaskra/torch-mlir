@@ -101,8 +101,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       for (int i = 0; i < shape_bias[0]; ++i) {
         BiasVec[i] = distribution(generator);
       }
-      Value Bias =
-          createTensor(rewriter, loc, context, shape_bias, BiasVec);
+      Value Bias = createTensor(rewriter, loc, context, shape_bias, BiasVec);
       Value list_padding = rewriter.create<PrimListConstructOp>(
           loc, ListType::get(IntType::get(context)), ValueRange({int0, int0}));
       values[i + 1] = rewriter.create<AtenConvolutionOp>(
@@ -140,8 +139,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       for (int i = 0; i < shape_bias[0]; ++i) {
         BiasVec[i] = distribution(generator);
       }
-      Value Bias =
-          createTensor(rewriter, loc, context, shape_bias, BiasVec);
+      Value Bias = createTensor(rewriter, loc, context, shape_bias, BiasVec);
       Value list_padding = rewriter.create<PrimListConstructOp>(
           loc, ListType::get(IntType::get(context)), ValueRange({int0, int0}));
       Value randomConv_1 = rewriter.create<AtenConvolutionOp>(
@@ -170,8 +168,8 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       for (int i = 0; i < weightSize_2; ++i) {
         WeightVec_2[i] = distribution(generator);
       }
-      Weight = createTensor(rewriter, loc, context, shape_weight_2,
-                                   WeightVec_2);
+      Weight =
+          createTensor(rewriter, loc, context, shape_weight_2, WeightVec_2);
 
       // bias
       shape_bias[0] = shape_weight_2[0];
@@ -249,8 +247,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       for (int i = 0; i < shape_bias[0]; ++i) {
         BiasVec[i] = distribution(generator);
       }
-      Value Bias =
-          createTensor(rewriter, loc, context, shape_bias, BiasVec);
+      Value Bias = createTensor(rewriter, loc, context, shape_bias, BiasVec);
       auto shape_conv = shape;
       shape_conv[1] = shape_weight[0];
       int conv_size =

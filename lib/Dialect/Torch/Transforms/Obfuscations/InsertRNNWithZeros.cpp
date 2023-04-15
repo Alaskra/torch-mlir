@@ -75,16 +75,15 @@ static void insertRNNWithZeros(MLIRContext *context, Operation *f,
   shape_transpose_a[0] = shape_transpose_a[1] = shape[2];
   int size_transpose_a = shape_transpose_a[0] * shape_transpose_a[1];
   std::vector<float> zeroTranspose_aVec(size_transpose_a, 0);
-  Value valueTranspose_a = createTensor(
-      rewriter, loc, context, shape_transpose_a, zeroTranspose_aVec);
+  Value valueTranspose_a = createTensor(rewriter, loc, context,
+                                        shape_transpose_a, zeroTranspose_aVec);
 
   // add
   auto shape_add = shape;
   shape_add.erase(shape_add.begin() + 1, shape_add.end());
   std::vector<float> valueAddVec(shape_add[0], 0);
   shape_add[0] = shape[3];
-  Value valueAdd =
-      createTensor(rewriter, loc, context, shape_add, valueAddVec);
+  Value valueAdd = createTensor(rewriter, loc, context, shape_add, valueAddVec);
 
   // create result_type
   // slice_type
@@ -102,8 +101,7 @@ static void insertRNNWithZeros(MLIRContext *context, Operation *f,
   shape_cat[1] = shape_hidden[1] + shape_hidden[1];
   int size_cat = shape_cat[0] * shape_cat[1] * shape_cat[2];
   std::vector<float> zeroCatVec(size_cat, 0);
-  Value zeroCat =
-      createTensor(rewriter, loc, context, shape_cat, zeroCatVec);
+  Value zeroCat = createTensor(rewriter, loc, context, shape_cat, zeroCatVec);
 
   // parameters of slice
   Value int_start =
@@ -139,8 +137,7 @@ static void insertRNNWithZeros(MLIRContext *context, Operation *f,
     shape_cat[0] = shape_view[0] * cycles;
     int size_cat = shape_cat[0] * shape_cat[1] * shape_cat[2] * shape_cat[3];
     std::vector<float> zeroCatVec(size_cat);
-    Value zeroCat =
-        createTensor(rewriter, loc, context, shape_cat, zeroCatVec);
+    Value zeroCat = createTensor(rewriter, loc, context, shape_cat, zeroCatVec);
     cat_extra =
         rewriter.create<AtenCatOp>(loc, zeroCat.getType(), list_extra, int0);
   }

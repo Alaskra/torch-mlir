@@ -96,8 +96,7 @@ static void insertRNN(MLIRContext *context, Operation *f, int number) {
     shape_cat[0] = shape_view[0] * cycles;
     int size_cat = shape_cat[0] * shape_cat[1] * shape_cat[2] * shape_cat[3];
     std::vector<float> zeroCatVec(size_cat);
-    Value zeroCat =
-        createTensor(rewriter, loc, context, shape_cat, zeroCatVec);
+    Value zeroCat = createTensor(rewriter, loc, context, shape_cat, zeroCatVec);
     cat_extra =
         rewriter.create<AtenCatOp>(loc, zeroCat.getType(), list_extra, int0);
   }
@@ -107,8 +106,7 @@ static void insertRNN(MLIRContext *context, Operation *f, int number) {
   shape_cat[1] = shape[2] * 2;
   int size_cat = shape_cat[0] * shape_cat[1] * shape_cat[2];
   std::vector<float> zeroCatVec(size_cat);
-  Value zeroCat =
-      createTensor(rewriter, loc, context, shape_cat, zeroCatVec);
+  Value zeroCat = createTensor(rewriter, loc, context, shape_cat, zeroCatVec);
 
   // transpose_hidden
   auto shape_transpose = shape;
@@ -125,8 +123,8 @@ static void insertRNN(MLIRContext *context, Operation *f, int number) {
       }
     }
   }
-  Value valueTranspose = createTensor(
-      rewriter, loc, context, shape_transpose, valueTransposeVec);
+  Value valueTranspose =
+      createTensor(rewriter, loc, context, shape_transpose, valueTransposeVec);
 
   // add_hidden
   Value float1 =
@@ -136,8 +134,7 @@ static void insertRNN(MLIRContext *context, Operation *f, int number) {
   shape_add[0] = shape[3];
   std::vector<float> valueAddVec(shape_add[0], 0);
 
-  Value valueAdd =
-      createTensor(rewriter, loc, context, shape_add, valueAddVec);
+  Value valueAdd = createTensor(rewriter, loc, context, shape_add, valueAddVec);
 
   Value int_start =
       rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(0));
@@ -237,8 +234,8 @@ static void insertRNN(MLIRContext *context, Operation *f, int number) {
       shape_add_2[0] = shape[3];
       std::vector<float> valueAdd_2Vec(shape_add_2[0], 0);
 
-      Value valueAdd_2 = createTensor(rewriter, loc, context,
-                                             shape_add_2, valueAdd_2Vec);
+      Value valueAdd_2 =
+          createTensor(rewriter, loc, context, shape_add_2, valueAdd_2Vec);
       Value add_2 = rewriter.create<AtenAddTensorOp>(
           loc, matmul_2.getType(), matmul_2, valueAdd_2, float1);
       // relu

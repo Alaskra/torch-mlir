@@ -195,9 +195,8 @@ float *LUP_solve_inverse(float A[], int N) {
   return inv_A;
 }
 
-Value createTensor(IRRewriter &rewriter, Location loc,
-                          MLIRContext *context, std::vector<long> shape,
-                          std::vector<float> weight) {
+Value createTensor(IRRewriter &rewriter, Location loc, MLIRContext *context,
+                   std::vector<long> shape, std::vector<float> weight) {
   auto resultTensorType = ValueTensorType::get(context, llvm::ArrayRef(shape),
                                                rewriter.getF32Type());
   auto dense = DenseElementsAttr::get(
@@ -206,9 +205,8 @@ Value createTensor(IRRewriter &rewriter, Location loc,
   return rewriter.create<ValueTensorLiteralOp>(loc, resultTensorType, dense);
 }
 
-Value createReshape(IRRewriter &rewriter, Location loc,
-                           MLIRContext *context, std::vector<long> shape,
-                           Value originVal) {
+Value createReshape(IRRewriter &rewriter, Location loc, MLIRContext *context,
+                    std::vector<long> shape, Value originVal) {
   // reshape originVal to according shape
   std::vector<Value> values;
   for (auto i : shape) {

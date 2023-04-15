@@ -45,8 +45,8 @@ static std::vector<float> createNumbers(int n) {
   return vals;
 }
 
-static Value createSplit(Location loc, IRRewriter &rewriter, std::vector<Value> valueList,
-                         Value rst) {
+static Value createSplit(Location loc, IRRewriter &rewriter,
+                         std::vector<Value> valueList, Value rst) {
   Value int1 =
       rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(1));
   std::vector<Value> mulList;
@@ -64,8 +64,7 @@ static Value createSplit(Location loc, IRRewriter &rewriter, std::vector<Value> 
 }
 
 static void valueSplit(MLIRContext *context,
-                       SmallPtrSet<Operation *, 16> opWorklist,
-                       int number) {
+                       SmallPtrSet<Operation *, 16> opWorklist, int number) {
   // replace input x with p1*x1+p2x2+...+pn*xn, and p1+p2+...+pn=1
 
   IRRewriter rewriter(context);
@@ -90,8 +89,7 @@ static void valueSplit(MLIRContext *context,
 }
 
 static void valueSplitRNN(MLIRContext *context,
-                          SmallPtrSet<Operation *, 16> opWorklist,
-                          int number) {
+                          SmallPtrSet<Operation *, 16> opWorklist, int number) {
   // replace input x with p1*x1+p2x2+...+pn*xn, and p1+p2+...+pn=1
   // special for RNN: hidden layer in loop share the same weight
   // prerequest: all ops in opWorklist is same op in unrolling RNN loop
