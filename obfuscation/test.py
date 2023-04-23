@@ -54,15 +54,21 @@ def runTest(test=Test(), verbose=False):
     outputs = recursively_convert_from_numpy(outputs)
 
     out_pytorch = model(*inputs)
+    if verbose:
+        print("================")
+        print("origin outputs")
+        print("================")
+        print(out_pytorch)
+        print("================")
+        print("outputs after obfuscation")
+        print("================")
+        print(outputs)
 
     if torch.allclose(outputs, out_pytorch, rtol=1e-2, atol=1e-6):
         # value_report = ValueReport(outputs, out_pytorch, ErrorContext([""]))
         # if not value_report.failed:
         return ["SUCCESS", test.name]
     else:
-        if verbose:
-            print(outputs)
-            print(out_pytorch)
         return ["FAILED", test.name]
 
 
@@ -81,7 +87,7 @@ Regular expression specifying which tests to include in this run.
         "--verbose",
         default=False,
         action="store_true",
-        help="report test results with additional detail",
+        help="print IR and output value before and after obfuscation",
     )
     parser.add_argument(
         "-s",
@@ -123,7 +129,7 @@ def runTests(tests, filter, verbose=False, sequential=True):
         torch.autograd.set_grad_enabled(False)
 
         pool = mp.Pool(num_processes)
-        arglist = zip(tests, repeat(verbose))
+        arglist = zip(filtered_tests, repeat(verbose))
         handles = pool.starmap_async(runTest, arglist)
         results = handles.get()
         for result in results:

@@ -6,22 +6,21 @@ tu = TestUtils()
 GLOBAL_TEST_REGISTRY = []
 # the tests that failed currently, if bug is fixed, remove it
 TEST_NOT_RUN = [
-    "ObfuscationRNNInsertSkip",
-    "ObfuscationRNNInsertInception",
-    "ObfuscationRNNInsertRNN",
-    "ObfuscationRNNInsertRNNWithZeros",
-
-    "ObfuscationLSTMInsertSkip",
-    "ObfuscationLSTMInsertSepraConv",
-    "ObfuscationLSTMInsertInception",
-    "ObfuscationLSTMInsertRNN",
-    "ObfuscationLSTMInsertRNNWithZeros",
-
-    "ObfuscationGRUInsertSkip",
-    "ObfuscationGRUInsertSepraConv",
-    "ObfuscationGRUInsertInception",
-    "ObfuscationGRUInsertRNN",
-    "ObfuscationGRUInsertRNNWithZeros",
+    "RNNInsertSkip",
+    "RNNInsertSepraConv",
+    "RNNInsertInception",
+    "RNNInsertRNN",
+    "RNNInsertRNNWithZeros",
+    "LSTMInsertSkip",
+    "LSTMInsertSepraConv",
+    "LSTMInsertInception",
+    "LSTMInsertRNN",
+    "LSTMInsertRNNWithZeros",
+    "GRUInsertSkip",
+    "GRUInsertSepraConv",
+    "GRUInsertInception",
+    "GRUInsertRNN",
+    "GRUInsertRNNWithZeros",
 ]
 # Ensure that there are no duplicate names in the global test registry.
 _SEEN_UNIQUE_NAME = set()
@@ -30,7 +29,7 @@ _SEEN_UNIQUE_NAME = set()
 class Test:
     def __init__(
         self,
-        name="ObfuscateLeNet",
+        name="LeNet",
         model=LeNet(),
         passes=[],
         inputs=tu.rand(1, 1, 28, 28),
@@ -50,8 +49,7 @@ class Test:
 
 def addGlobalTest(name, model, inputs, passes):
     global GLOBAL_TEST_REGISTRY
-    if name in _SEEN_UNIQUE_NAME:
-        assert name not in GLOBAL_TEST_REGISTRY, f"test name: {name} dubpicated"
+    assert name not in GLOBAL_TEST_REGISTRY, f"test name: {name} dubpicated"
     _SEEN_UNIQUE_NAME.add(name)
     GLOBAL_TEST_REGISTRY.append(Test(name, model, passes, inputs))
 
@@ -77,21 +75,21 @@ def addLeNetTests():
         addGlobalTest(name, net, inputs, passes)
 
     for name, passes in general_obfuscation.items():
-        addLeNetTest(f"ObfuscateLeNet{name}", passes)
+        addLeNetTest(f"LeNet{name}", passes)
     addLeNetTest(
-        "ObfuscateLeNetBranchLayer",
+        "LeNetBranchLayer",
         ["torch-branch-layer{layer=2 branch=4}"],
     )
     addLeNetTest(
-        "ObfuscateLeNetWidenConv",
+        "LeNetWidenConv",
         ["torch-widen-conv-layer{layer=1 number=4}"],
     )
     addLeNetTest(
-        "ObfuscateLeNetWidenInsertConv",
+        "LeNetWidenInsertConv",
         ["torch-widen-conv-layer", "torch-insert-conv"],
     )
     addLeNetTest(
-        "ObfuscateLeNetInsertMaxpool",
+        "LeNetInsertMaxpool",
         ["torch-insert-Maxpool"],
     )
 
@@ -103,21 +101,21 @@ def addRNNTests():
         addGlobalTest(name, net, inputs, passes)
 
     for name, passes in general_obfuscation.items():
-        addRNNTest(f"ObfuscationRNN{name}", passes)
+        addRNNTest(f"RNN{name}", passes)
     addRNNTest(
-        "ObfuscateRNNValueSplit",
+        "RNNValueSplitRNN",
         ["torch-value-split{net=RNN number=5}"],
     )
     addRNNTest(
-        "ObfuscateRNNMaskSplit",
+        "RNNMaskSplitRNN",
         ["torch-mask-split{net=RNN number=5}"],
     )
     addRNNTest(
-        "ObfuscateRNNInsertConv",
+        "RNNInsertConvRNN",
         ["torch-insert-conv{net=RNN}"],
     )
     addRNNTest(
-        "ObfuscateRNNInsertLinear",
+        "RNNInsertLinearRNN",
         ["torch-insert-linear{net=RNN}"],
     )
 
@@ -129,7 +127,7 @@ def addLSTMTests():
         addGlobalTest(name, net, inputs, passes)
 
     for name, passes in general_obfuscation.items():
-        addLSTMTest(f"ObfuscationLSTM{name}", passes)
+        addLSTMTest(f"LSTM{name}", passes)
 
 
 def addGRUTests():
@@ -139,7 +137,7 @@ def addGRUTests():
         addGlobalTest(name, net, inputs, passes)
 
     for name, passes in general_obfuscation.items():
-        addGRUTest(f"ObfuscationGRU{name}", passes)
+        addGRUTest(f"GRU{name}", passes)
 
 
 def addTests():
