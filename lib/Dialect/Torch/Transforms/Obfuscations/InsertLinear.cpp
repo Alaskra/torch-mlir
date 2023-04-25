@@ -11,17 +11,6 @@
 #include <cstdlib>
 #include <ctime>
 
-#include "mlir/IR/BuiltinDialect.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchTypes.h"
-#include "torch-mlir/Dialect/Torch/Transforms/Passes.h"
-#include "torch-mlir/Dialect/Torch/Utils/Utils.h"
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/ADT/StringSet.h"
-
 using namespace mlir;
 using namespace mlir::torch;
 using namespace mlir::torch::Torch;
