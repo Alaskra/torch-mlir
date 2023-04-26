@@ -6,18 +6,18 @@ tu = TestUtils()
 GLOBAL_TEST_REGISTRY = []
 # the tests that failed currently, if bug is fixed, remove it
 TEST_NOT_RUN = [
-    "RNNInsertSkip",
-    "RNNInsertSepraConv",
+#    "RNNInsertSkip",
+#    "RNNInsertSepraConv",
     "RNNInsertInception",
     "RNNInsertRNN",
     "RNNInsertRNNWithZeros",
-    "LSTMInsertSkip",
-    "LSTMInsertSepraConv",
+#    "LSTMInsertSkip",
+#    "LSTMInsertSepraConv",
     "LSTMInsertInception",
     "LSTMInsertRNN",
     "LSTMInsertRNNWithZeros",
-    "GRUInsertSkip",
-    "GRUInsertSepraConv",
+#    "GRUInsertSkip",
+#    "GRUInsertSepraConv",
     "GRUInsertInception",
     "GRUInsertRNN",
     "GRUInsertRNNWithZeros",
@@ -118,6 +118,7 @@ def addRNNTests():
         "RNNInsertLinearRNN",
         ["torch-insert-linear{net=RNN}"],
     )
+    
 
 
 def addLSTMTests():

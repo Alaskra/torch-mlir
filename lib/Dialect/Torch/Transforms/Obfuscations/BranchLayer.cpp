@@ -14,7 +14,8 @@
 // insert one convolution
 static Value InertOneConv(RewriteOp &rewrite, vector<int64_t> shape, Value inputOp) {
   // get one kernel
-  toStdShape(shape);
+  shape[0] = shape[1];
+  shape[2] = shape[3] = 1;
   int kernelSize = getKernelSize(shape);
   std::vector<float> oneKernelVec(kernelSize, 0);
   creatOneTensor(oneKernelVec, shape[0]);
@@ -27,8 +28,8 @@ static Value InertOneConv(RewriteOp &rewrite, vector<int64_t> shape, Value input
   return  rewrite.createConvOp({inputOp, oneKernel, zeroBias});
 }
 
-// branch the colored layer and insert a
-// convolution into the left branch.
+// branch the layer and insert a
+// convolution into the branchs randomly.
 static void BranchLayer(MLIRContext *context, Operation *f, int layer, int branch) {
   // input test
   input_assert(branch < 2, "branch > 1 \n");
@@ -37,7 +38,7 @@ static void BranchLayer(MLIRContext *context, Operation *f, int layer, int branc
   OpList oplist;
   int type = getReluOp(oplist, f, layer);
   if (!type) return;
-  // get convolution operations
+  // get relu operations
   auto op = *oplist.begin();
   const int dim = 1;
   // get input information
@@ -100,9 +101,7 @@ static void BranchLayer(MLIRContext *context, Operation *f, int layer, int branc
 
   // cat branch tensors
   Value catOp = rewrite.createCatTensorOp(inputShape, dimOp, branchTensorOp);
-  // add new relu
   Value relu = rewrite.createReluOp(type, catOp);
-  // replace old relu
   rewrite.replaceOp(relu);
 }
 

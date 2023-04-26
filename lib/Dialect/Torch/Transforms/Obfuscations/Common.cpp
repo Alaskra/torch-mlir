@@ -18,20 +18,6 @@ bool getConvMiddleOps(OpList &oplist, Operation *f, int layer) {
         "layer < max_layer(%d) \n", (layer - convLayer));
   return true;
 }
-bool getConvOp(OpList &oplist, Operation *f, int layer) {
-  int convLayer = layer;
-  f->walk([&](Operation *op) {
-    if (isa<AtenConvolutionOp>(op)) {
-      convLayer--;
-      if (convLayer == 0)
-        oplist.insert(op);
-    }
-  });
-  // input test
-  input_assert_ret(convLayer > 0, false, 
-      "layer <= max_layer(%d) \n", (layer - convLayer));
-  return true;
-}
 
 #define ReluList    AtenReluOp, AtenSigmoidOp
 #define LeakyReluList   AtenTanhOp
@@ -42,7 +28,8 @@ int getReluOp(OpList &oplist, Operation *f, int layer) {
   f->walk([&](Operation *op) {
     if (isa<AllReluList>(op)) {
       rlayer--;
-      if (rlayer == 0) {
+      auto resType = op->getResult(0).getType();
+      if (rlayer == 0 && resType.isa<ValueTensorType>()) {
         oplist.insert(op);
         if (isa<AllReluList>(op)) {
           type = 1;
@@ -59,6 +46,32 @@ int getReluOp(OpList &oplist, Operation *f, int layer) {
 }
 
 
+// frequently-used function about tensor and shape
+vector<int64_t> getShape(Value tensorOp) {
+  // kernel shape: out_channels, in_channels, height, width
+  // bias shape: out_channels
+  return tensorOp.getType().cast<ValueTensorType>().getSizes().vec();
+}
+ValueTensorLiteralOp getTensor(Value tensorOp) {
+  return tensorOp.getDefiningOp<ValueTensorLiteralOp>();
+}
+vector<int64_t> toStdShape(vector<int64_t> shape) {
+  // if dimansion less than 4, need to reshape to 4
+  vector<int64_t> newShape(4, 1);
+  for (int i = 4 - shape.size(); i < 4; i++) {
+    newShape[i] = shape[i - shape.size()];
+  }
+  return newShape;
+}
+void toBiasShape(vector<int64_t> &kernelShape) {
+  kernelShape.erase(kernelShape.begin() + 1, kernelShape.end());
+}
+int getChannelSize(vector<int64_t> kernelShape) {
+  return kernelShape[1] * kernelShape[2] * kernelShape[3];
+}
+int getKernelSize(vector<int64_t> kernelShape) {
+  return kernelShape[0] * kernelShape[1] * kernelShape[2] * kernelShape[3];
+}
 // frequently-used function about tensor
 void creatOneTensor(vector<float> &ktensor, int64_t len) {
   for (int i = 0; i < len; i++) {
@@ -71,6 +84,8 @@ void copyTensor(std::vector<float> &ktensor, ValueTensorLiteralOp tensor) {
   }
 }
 
+
+// zwj: frequently-used function 
 Value createTensor(IRRewriter &rewriter, Location loc, MLIRContext *context,
                    std::vector<long> shape, std::vector<float> weight) {
   auto resultTensorType = ValueTensorType::get(context, llvm::ArrayRef(shape),
@@ -153,27 +168,31 @@ Value RewriteOp::createCatTensorOp(vector<int64_t> resultShape, Value dim, vecto
   auto resultType = getValueTensorType(resultShape);
   return rewriter.create<AtenCatOp>(this->loc, resultType, tensorList, dim);
 }
-Value RewriteOp::createConvOp(Type result, ValueRange convParam, Value groupOp) {
+Value RewriteOp::createConvOp(Type result, ValueRange tensorParam, vector<int64_t> intParam) {
   Type intType = IntType::get(this->context);
-  Value strideOp = createIntOp(1);
-  Value padOp = createIntOp(0);
-  Value dilOp = createIntOp(1);
+  // intParam: stride, pad, dil, group
+  Value strideOp = createIntOp(intParam[0]);
+  Value padOp = createIntOp(intParam[1]);
+  Value dilOp = createIntOp(intParam[2]);
   Value liststrideOp = createListOp(intType, {strideOp, strideOp});
   Value listPadOp = createListOp(intType, {padOp, padOp});
   Value listDilOp = createListOp(intType, {dilOp, dilOp});
   Value transOp = createBoolOp(false);
-  Value outPadOp = createListOp(intType, {padOp, padOp});
-  // convParam[0]:input, convParam[1]:weight, convParam[2]: bias
+  Value outPadOp = createListOp(intType, {});
+  Value groupOp = createIntOp(intParam[3]);
+  // tensorParam: input, weight, bias
   return rewriter.create<AtenConvolutionOp>(
-      loc, result, convParam[0], convParam[1], convParam[2], liststrideOp,
-      listPadOp, listDilOp, transOp, outPadOp, groupOp);
+      this->loc, result, tensorParam[0], tensorParam[1], tensorParam[2], 
+      liststrideOp, listPadOp, listDilOp, transOp, outPadOp, groupOp);
 }
-Value RewriteOp::createConvOp(Type result, ValueRange convParam) {
-  Value groupOp = createIntOp(1);
-  return createConvOp(result, convParam, groupOp);
+Value RewriteOp::createConvOp(ValueRange tensorParam, vector<int64_t> intParam) {
+  return createConvOp(tensorParam[0].getType(), tensorParam, intParam);
 }
-Value RewriteOp::createConvOp(ValueRange convParam) {
-  return createConvOp(convParam[0].getType(), convParam);
+Value RewriteOp::createConvOp(Type result, ValueRange tensorParam) {
+  return createConvOp(result, tensorParam, {1, 0, 1, 1});
+}
+Value RewriteOp::createConvOp(ValueRange tensorParam) {
+  return createConvOp(tensorParam, {1, 0, 1, 1});
 }
 Value RewriteOp::createReluOp(Value inputOp) {
   return rewriter.create<AtenReluOp>(this->loc, inputOp.getType(), inputOp);
@@ -193,6 +212,23 @@ Value RewriteOp::createReluOp(int type, Value inputOp) {
     relu = createLeakyReluOp(inputOp);
   }
   return relu;
+}
+Value RewriteOp::createReshape(vector<long> shape, Value originOp) {
+  // reshape originOp to according shape
+  std::vector<Value> values;
+  for (auto i : shape) {
+    values.push_back(this->createIntOp(i));
+  }
+  auto intType = IntType::get(this->context);
+  Value listShapeOp = createListOp(intType, values);
+  auto resType = getValueTensorType(shape);
+  return rewriter.create<AtenViewOp>(this->loc, resType, originOp, listShapeOp);  
+}
+Value RewriteOp::createMmOp(Type result, Value inputOp, Value weightOp) {
+  return rewriter.create<AtenMmOp>(this->loc, result, inputOp, weightOp);
+}
+Value RewriteOp::createMmOp(Value inputOp, Value weightOp) {
+  return this->createMmOp(inputOp.getType(), inputOp, weightOp);
 }
 //replace operations
 void RewriteOp::replaceTensorOp(ValueTensorLiteralOp &oldTensor, vector<int64_t> shape, vector<float> tensor) {

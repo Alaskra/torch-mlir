@@ -9,6 +9,7 @@
 
 #include "Common.h"
 
+
 // widen two convolution layer by adding channels
 // randomly copy channel to new channels
 static void WidenConvLayer(MLIRContext *context, Operation *f, int layer, int number) {
@@ -48,8 +49,9 @@ static void WidenConvLayer(MLIRContext *context, Operation *f, int layer, int nu
   // copy kernel channel
   shape[0] = shape[0] + number;
   for (auto channel : randomChannel) {
-    auto begin = channel * channelSize;
-    pushBackVec(kernelVec, begin, channelSize);
+    auto base = channel * channelSize;
+    kernelVec.insert(kernelVec.end(), kernelVec.begin() + base, 
+                  kernelVec.begin() + base + channelSize);
   }
   // replace old kernel tensor
   rewrite.replaceTensorOp(oldKernelTensor, shape, kernelVec);
@@ -110,10 +112,12 @@ static void WidenConvLayer(MLIRContext *context, Operation *f, int layer, int nu
       }
     }
     // copy
-    pushBackVec(newKernelVec, kernelVec, base, channelSize);
+    newKernelVec.insert(newKernelVec.end(), kernelVec.begin() + base, 
+                  kernelVec.begin() + base + channelSize);
     for (auto channel : randomChannel) {
       auto begin = base + channel * hwSize;
-      pushBackVec(newKernelVec, kernelVec, begin, hwSize);
+      newKernelVec.insert(newKernelVec.end(), kernelVec.begin() + begin, 
+                    kernelVec.begin() + begin + hwSize);
     }
   }
   shape[1] = shape[1] + number;

@@ -9,7 +9,7 @@
 
 #include "Common.h"
 
-// insert a separable convolution
+// insert two separable convolution: deep-wise, point-wise
 static void InsertSepraConv(MLIRContext *context, Operation *f, int layer) { 
   // input test
   input_assert(layer < 1, "layer > 0 \n");
@@ -17,7 +17,7 @@ static void InsertSepraConv(MLIRContext *context, Operation *f, int layer) {
   OpList oplist;
   int type = getReluOp(oplist, f, layer);
   if (!type) return;
-  // get convolution operations
+  // get relu operations
   auto op = *oplist.begin();
   // init rewrite
   RewriteOp rewrite(context, op);
@@ -25,9 +25,18 @@ static void InsertSepraConv(MLIRContext *context, Operation *f, int layer) {
   auto newOp = rewrite.cloneOp();
   Value oldResult = newOp->getResult(0);
 
-  // deep-wise convolution, (out, in, 1, 1), groups = in_channel
+  // deep-wise convolution, (out, in, 1, 1), group = in_channel
+  
+  // get std shape
+  auto oldShape = getShape(oldResult);
+  std::vector<int64_t> shape = oldShape;
+  bool needReshape = false;
+  if (oldShape.size() < 4) {
+    needReshape = true;
+    shape = toStdShape(oldShape);
+    oldResult = rewrite.createReshape(shape, oldResult);
+  }
   // get deep-wise kernel
-  auto shape = getShape(oldResult);
   int group = shape[1];
   shape[0] = shape[1];
   shape[1] = shape[2] = shape[3] = 1;
@@ -39,24 +48,24 @@ static void InsertSepraConv(MLIRContext *context, Operation *f, int layer) {
   std::vector<float> zeroBiasVec(shape[0], 0);
   Value zeroBias = rewrite.createTensorOp(shape, zeroBiasVec);
   // insert deep-wise conv
-  Value groupsOp = rewrite.createIntOp(group);
-  Value deepConv = rewrite.createConvOp(oldResult.getType(), {oldResult, deepKernel, zeroBias}, groupsOp);
-  // add new relu
+  Value deepConv = rewrite.createConvOp({oldResult, deepKernel, zeroBias}, {1, 0, 1, group});
   Value relu = rewrite.createReluOp(type, deepConv);
   
-  // point-wise convolution, (in, in, 1, 1), groups = 1
+  // point-wise convolution, (in, in, 1, 1), group = 1
   // get point-wise kernel
   shape = getShape(oldResult);
-  toStdShape(shape);
+  shape[0] = shape[1];
+  shape[2] = shape[3] = 1;
   kernelSize = getKernelSize(shape);
   std::vector<float> oneKernelVec(kernelSize);
   creatOneTensor(oneKernelVec, shape[0]);
   Value oneKernel = rewrite.createTensorOp(shape, oneKernelVec);
   // insert point-wise conv
-  Value oneConv = rewrite.createConvOp(oldResult.getType(), {relu, oneKernel, zeroBias});
-  // add new relu
+  Value oneConv = rewrite.createConvOp({relu, oneKernel, zeroBias});
   relu = rewrite.createReluOp(type, oneConv);
-  // replace old relu
+  // reshape back to origin shape
+  if (needReshape)
+    relu = rewrite.createReshape(oldShape, relu);
   rewrite.replaceOp(relu);
 }
 

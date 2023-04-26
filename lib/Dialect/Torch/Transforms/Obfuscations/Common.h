@@ -44,38 +44,17 @@ using std::vector;
 // frequently-used function about getting ops
 typedef llvm::SmallPtrSet<Operation *, 16> OpList;
 bool getConvMiddleOps(OpList &oplist, Operation *f, int layer);
-bool getConvOp(OpList &oplist, Operation *f, int layer);
+//bool getConvOp(OpList &oplist, Operation *f, int layer);
 int getReluOp(OpList &oplist, Operation *f, int layer);
 
+// frequently-used function about tensor and shape
+vector<int64_t> getShape(Value tensorOp);
+ValueTensorLiteralOp getTensor(Value tensorOp);
+vector<int64_t> toStdShape(vector<int64_t> shape);
+void toBiasShape(vector<int64_t> &kernelShape);
+int getChannelSize(vector<int64_t> kernelShape);
+int getKernelSize(vector<int64_t> kernelShape);
 // frequently-used function about tensor
-inline vector<int64_t> getShape(Value tensorOp) {
-  // kernel shape: out_channels, in_channels, height, width
-  // bias shape: out_channels
-  return tensorOp.getType().cast<ValueTensorType>().getSizes().vec();
-}
-inline ValueTensorLiteralOp getTensor(Value tensorOp) {
-  return tensorOp.getDefiningOp<ValueTensorLiteralOp>();
-}
-inline void toStdShape(vector<int64_t> &shape) {
-  shape[0] = shape[1];
-  shape[2] = shape[3] = 1;
-}
-inline void toBiasShape(vector<int64_t> &kernelShape) {
-  kernelShape.erase(kernelShape.begin() + 1, kernelShape.end());
-}
-inline int getChannelSize(vector<int64_t> kernelShape) {
-  return kernelShape[1] * kernelShape[2] * kernelShape[3];
-}
-inline int getKernelSize(vector<int64_t> kernelShape) {
-  return kernelShape[0] * kernelShape[1] * kernelShape[2] * kernelShape[3];
-}
-
-inline void pushBackVec(vector<float> &ktensor, vector<float> source, int start, int size) {
-  ktensor.insert(ktensor.end(), source.begin() + start, source.begin() + start + size);
-}
-inline void pushBackVec(vector<float> &ktensor, int start, int size) {
-  pushBackVec(ktensor, ktensor, start, size);
-}
 void copyTensor(vector<float> &ktensor, ValueTensorLiteralOp tensor);
 void creatOneTensor(vector<float> &ktensor, int64_t len);
 
@@ -107,13 +86,17 @@ public:
   Value createSliceTensorOp(vector<int64_t> branchShape, Value input, Value dim, Value start, Value end);
   Value createListOp(Type elemType, vector<Value> elemVec);
   Value createCatTensorOp(vector<int64_t> resultShape, Value dim, vector<Value> tensorVec);
-  Value createConvOp(Type result, ValueRange convParam, Value groupOp);
-  Value createConvOp(Type result, ValueRange convParam);
-  Value createConvOp(ValueRange convParam);
+  Value createConvOp(Type result, ValueRange tensorParam, vector<int64_t> intParam);
+  Value createConvOp(ValueRange tensorParam, vector<int64_t> intParam);
+  Value createConvOp(Type result, ValueRange tensorParam);
+  Value createConvOp(ValueRange tensorParam);
   Value createReluOp(Value inputOp);
   Value createLeakyReluOp(Value inputOp, Value nslope);
   Value createLeakyReluOp(Value inputOp);
   Value createReluOp(int type, Value inputOp);
+  Value createReshape(vector<long> shape, Value originOp);
+  Value createMmOp(Type result, Value inputOp, Value weightOp);
+  Value createMmOp(Value inputOp, Value weightOp);
   //replace operations
   void replaceTensorOp(ValueTensorLiteralOp &oldTensor, vector<int64_t> shape, vector<float> tensor);
   void replaceOp(Value newOp);
