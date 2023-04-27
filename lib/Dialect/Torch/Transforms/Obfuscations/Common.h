@@ -1,5 +1,23 @@
 #pragma once
 
+#include "../PassDetail.h"
+
+#include "mlir/IR/BuiltinDialect.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
+#include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
+#include "torch-mlir/Dialect/Torch/IR/TorchTypes.h"
+#include "torch-mlir/Dialect/Torch/Transforms/Passes.h"
+#include "torch-mlir/Dialect/Torch/Utils/Utils.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringSet.h"
+
+using namespace mlir;
+using namespace mlir::torch;
+using namespace mlir::torch::Torch;
+using std::vector;
+
 // **************frequently-used macro**************
 // assert macro
 #include <cstdio>
@@ -21,176 +39,74 @@
 #define print_line() printf("line = %d\n", __LINE__)
 #define print_value(value) llvm::outs() << value << '\n'
 
-// **************package frequently-used***************
-// package with func and class
-#include "../PassDetail.h"
-
-#include "mlir/IR/BuiltinDialect.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchTypes.h"
-#include "torch-mlir/Dialect/Torch/Transforms/Passes.h"
-#include "torch-mlir/Dialect/Torch/Utils/Utils.h"
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/ADT/StringSet.h"
-
-using namespace mlir;
-using namespace mlir::torch;
-using namespace mlir::torch::Torch;
-using std::vector;
+// **************frequently-used function***************
 
 // frequently-used function about getting ops
 typedef llvm::SmallPtrSet<Operation *, 16> OpList;
 bool getConvMiddleOps(OpList &oplist, Operation *f, int layer);
-bool getConvOp(OpList &oplist, Operation *f, int layer);
+Operation *getReluOp(Operation *f, int layer);
+int getReluType(Operation *reluOp);
 
+// frequently-used function about tensor and shape
+vector<int64_t> getShape(Value tensorOp);
+ValueTensorLiteralOp getTensor(Value tensorOp);
+vector<int64_t> toStdShape(vector<int64_t> shape);
+void toBiasShape(vector<int64_t> &kernelShape);
+int getChannelSize(vector<int64_t> kernelShape);
+int getKernelSize(vector<int64_t> kernelShape);
 // frequently-used function about tensor
-inline vector<int64_t> getShape(Value tensorOp) {
-  // kernel shape: out_channels, in_channels, height, width
-  // bias shape: out_channels
-  return tensorOp.getType().cast<ValueTensorType>().getSizes().vec();
-}
-inline void toStdShape(vector<int64_t> &shape) {
-  shape[0] = shape[1];
-  shape[2] = shape[3] = 1;
-}
-inline void toBiasShape(vector<int64_t> &kernelShape) {
-  kernelShape.erase(kernelShape.begin() + 1, kernelShape.end());
-}
-inline int getChannelSize(vector<int64_t> kernelShape) {
-  return kernelShape[1] * kernelShape[2] * kernelShape[3];
-}
-inline int getKernelSize(vector<int64_t> kernelShape) {
-  return kernelShape[0] * kernelShape[1] * kernelShape[2] * kernelShape[3];
-}
-
-inline void pushBackVec(vector<float> &ktensor, vector<float> source, int start,
-                        int size) {
-  ktensor.insert(ktensor.end(), source.begin() + start,
-                 source.begin() + start + size);
-}
-inline void pushBackVec(vector<float> &ktensor, int start, int size) {
-  pushBackVec(ktensor, ktensor, start, size);
-}
 void copyTensor(vector<float> &ktensor, ValueTensorLiteralOp tensor);
 void creatOneTensor(vector<float> &ktensor, int64_t len);
 
-// frequently-used function about convolution operations
+Value createTensor(IRRewriter &rewriter, Location loc, MLIRContext *context,
+                   std::vector<long> shape, std::vector<float> weight);
+Value createReshape(IRRewriter &rewriter, Location loc, MLIRContext *context,
+                    std::vector<long> shape, Value originVal);
+SmallPtrSet<Operation *, 16> getPositiveLayers(Operation *f);
+
+// **************class about rewriter***************
 class RewriteOp {
 private:
   MLIRContext *context;
   IRRewriter rewriter;
-  AtenConvolutionOp convOp;
   Location loc;
-  Value oldKernelOp;
-  Value oldBiasOp;
+  Operation *op;
 
 public:
-  RewriteOp(MLIRContext *context, AtenConvolutionOp &convOp)
-      : context(context), rewriter(context), convOp(convOp),
-        loc(convOp.getLoc()) {
-    rewriter.setInsertionPoint(convOp);
-    oldKernelOp = convOp.getOperand(1);
-    oldBiasOp = convOp.getOperand(2);
-  }
-  void setConvOp(AtenConvolutionOp &convOp) {
-    this->convOp = convOp;
-    oldKernelOp = convOp.getOperand(1);
-    oldBiasOp = convOp.getOperand(2);
-  }
-  Value getInput() { return convOp.getOperand(0); }
-  Value getKernel() { return oldKernelOp; }
-  Value getBias() { return oldBiasOp; }
-  ValueTensorLiteralOp getKernelTensor() {
-    return oldKernelOp.getDefiningOp<ValueTensorLiteralOp>();
-  }
-  ValueTensorLiteralOp getBiasTensor() {
-    return oldBiasOp.getDefiningOp<ValueTensorLiteralOp>();
-  }
-  vector<int64_t> getKernelShape() { return getShape(oldKernelOp); }
-  vector<int64_t> getBiasShape() { return getShape(oldBiasOp); }
-  ValueTensorType getValueTensorType(vector<int64_t> shape) {
-    return ValueTensorType::get(context, llvm::ArrayRef(shape),
-                                rewriter.getF32Type());
-  }
-  ValueTensorType getLeastValueTensorType() {
-    return ValueTensorType::getWithLeastStaticInformation(context);
-  }
-  DenseElementsAttr getTensorDense(vector<int64_t> shape,
-                                   vector<float> tensor) {
-    return DenseElementsAttr::get(
-        RankedTensorType::get(llvm::ArrayRef(shape), rewriter.getF32Type()),
-        llvm::ArrayRef(tensor));
-  }
-  Value createTensorOp(vector<int64_t> shape, vector<float> tensor) {
-    auto tensorType = getValueTensorType(shape);
-    auto tensorDense = getTensorDense(shape, tensor);
-    return rewriter.create<ValueTensorLiteralOp>(loc, tensorType, tensorDense);
-  }
-  Value createIntOp(int64_t value) {
-    return rewriter.create<ConstantIntOp>(loc,
-                                          rewriter.getI64IntegerAttr(value));
-  }
-  Value createFloatOp(double value) {
-    return rewriter.create<ConstantFloatOp>(loc,
-                                            rewriter.getF64FloatAttr(value));
-    ;
-  }
-  Value createConvOp(Type result, Value inputOp, Value weightOp, Value biasOp,
-                     Value groupOp) {
-    return rewriter.create<AtenConvolutionOp>(
-        loc, result, inputOp, weightOp, biasOp, convOp.getOperand(3),
-        convOp.getOperand(4), convOp.getOperand(5), convOp.getOperand(6),
-        convOp.getOperand(7), groupOp);
-  }
-  Value createConvOp(Type result, Value inputOp, Value weightOp, Value biasOp) {
-    return createConvOp(result, inputOp, weightOp, biasOp,
-                        convOp.getOperand(8));
-  }
-  Value createConvOp(Value inputOp, Value weightOp, Value biasOp,
-                     Value groupOp) {
-    return createConvOp(inputOp.getType(), inputOp, weightOp, biasOp, groupOp);
-  }
-  Value createConvOp(Value inputOp, Value weightOp, Value biasOp) {
-    return createConvOp(inputOp, weightOp, biasOp, convOp.getOperand(8));
-  }
-  void replaceConvOp(Value newInputOp) {
-    Value newConv =
-        createConvOp(convOp.getType(), newInputOp, oldKernelOp, oldBiasOp);
-    rewriter.replaceOp(convOp, newConv);
-  }
-  void replaceTensorOp(ValueTensorLiteralOp &oldTensor, vector<int64_t> shape,
-                       vector<float> tensor) {
-    auto tensorType = getValueTensorType(shape);
-    auto tensorDense = getTensorDense(shape, tensor);
-    rewriter.replaceOpWithNewOp<ValueTensorLiteralOp>(oldTensor, tensorType,
-                                                      tensorDense);
-  }
-  Value createAddTensorOp(Type result, Value tensor1, Value tensor2,
-                          Value alpha) {
-    return rewriter.create<AtenAddTensorOp>(loc, result, tensor1, tensor2,
-                                            alpha);
-  }
+  RewriteOp(MLIRContext *context, Operation *op);
+  Operation *cloneOp();
+  // create operations
+  Value createBoolOp(bool value);
+  Value createIntOp(int64_t value);
+  Value createFloatOp(double value);
+  Value createTensorOp(vector<int64_t> shape, vector<float> tensor);
+  Value createAddTensorOp(Value tensor1, Value tensor2, Value alpha);
   Value createSliceTensorOp(vector<int64_t> branchShape, Value input, Value dim,
-                            Value start, Value end) {
-    auto branchTensorType = getValueTensorType(branchShape);
-    auto step = createIntOp(1);
-    return rewriter.create<AtenSliceTensorOp>(loc, branchTensorType, input, dim,
-                                              start, end, step);
-  }
-  Value creatTensorListOp(ValueTensorType tensorType, vector<Value> tensorVec) {
-    return rewriter.create<PrimListConstructOp>(loc, ListType::get(tensorType),
-                                                ValueRange(tensorVec));
-  }
-  Value creatCatTensorOp(vector<int64_t> resultShape, Value dim,
-                         vector<Value> tensorVec) {
-    auto vtensorType = getLeastValueTensorType();
-    auto tensorList = creatTensorListOp(vtensorType, tensorVec);
-    auto resultType = getValueTensorType(resultShape);
-    return rewriter.create<AtenCatOp>(loc, resultType, tensorList, dim);
-  }
+                            Value start, Value end);
+  Value createListOp(Type elemType, vector<Value> elemVec);
+  Value createCatTensorOp(vector<int64_t> resultShape, Value dim,
+                          vector<Value> tensorVec);
+  Value createConvOp(Type result, ValueRange tensorParam,
+                     vector<int64_t> intParam = {1, 0, 1, 1});
+  Value createConvOp(ValueRange tensorParam,
+                     vector<int64_t> intParam = {1, 0, 1, 1});
+  // Value createConvOp(Type result, ValueRange tensorParam);
+  // Value createConvOp(ValueRange tensorParam);
+  Value createReluOp(Value inputOp);
+  Value createLeakyReluOp(Value inputOp, Value nslope);
+  Value createLeakyReluOp(Value inputOp);
+  Value createReluOp(int type, Value inputOp);
+  Value createReshape(vector<long> shape, Value originOp);
+  Value createMmOp(Type result, Value inputOp, Value weightOp);
+  Value createMmOp(Value inputOp, Value weightOp);
+  // replace operations
+  void replaceTensorOp(ValueTensorLiteralOp &oldTensor, vector<int64_t> shape,
+                       vector<float> tensor);
+  void replaceOp(Value newOp);
+  // about tensor
+  ValueTensorType getValueTensorType(vector<int64_t> shape);
+  ValueTensorType getLeastValueTensorType();
+  DenseElementsAttr getTensorDense(vector<int64_t> shape, vector<float> tensor);
 };
 
 // *********************macro for pass********************************
@@ -226,9 +142,3 @@ public:
     return std::make_unique<name##Pass>(                                       \
         handle_param(n, notype_param, __VA_ARGS__));                           \
   }
-
-Value createTensor(IRRewriter &rewriter, Location loc, MLIRContext *context,
-                   std::vector<long> shape, std::vector<float> weight);
-Value createReshape(IRRewriter &rewriter, Location loc, MLIRContext *context,
-                    std::vector<long> shape, Value originVal);
-SmallPtrSet<Operation *, 16> getPositiveLayers(Operation *f);

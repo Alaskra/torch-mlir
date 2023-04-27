@@ -14,18 +14,28 @@ static void InsertSkip(MLIRContext *context, Operation *f, int layer) {
   // input test
   input_assert(layer < 1, "layer > 0 \n");
   // get operations that you need
-  OpList oplist;
-  bool is_get = getConvOp(oplist, f, layer);
-  if (!is_get)
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
     return;
-  // get convolution operations
-  auto it = oplist.begin();
-  AtenConvolutionOp convOp = llvm::dyn_cast<AtenConvolutionOp>(*it);
+  int type = getReluType(op);
   // init rewrite
-  RewriteOp rewrite(context, convOp);
+  RewriteOp rewrite(context, op);
+  // get output tensor
+  auto newOp = rewrite.cloneOp();
+  Value oldResult = newOp->getResult(0);
+
+  // get std shape
+  auto oldShape = getShape(oldResult);
+  std::vector<int64_t> shape = oldShape;
+  bool needReshape = false;
+  if (oldShape.size() < 4) {
+    needReshape = true;
+    shape = toStdShape(oldShape);
+    oldResult = rewrite.createReshape(shape, oldResult);
+  }
   // get zero kernel
-  auto shape = rewrite.getKernelShape();
-  toStdShape(shape);
+  shape[0] = shape[1];
+  shape[2] = shape[3] = 1;
   int kernelSize = getKernelSize(shape);
   std::vector<float> zeroKernelVec(kernelSize, 0);
   Value zeroKernel = rewrite.createTensorOp(shape, zeroKernelVec);
@@ -34,15 +44,16 @@ static void InsertSkip(MLIRContext *context, Operation *f, int layer) {
   std::vector<float> zeroBiasVec(shape[0], 0);
   auto zeroBias = rewrite.createTensorOp(shape, zeroBiasVec);
   // zero conv
-  Value oldInput = rewrite.getInput();
-  Value zeroConv = rewrite.createConvOp(oldInput, zeroKernel, zeroBias);
+  Value zeroConv = rewrite.createConvOp({oldResult, zeroKernel, zeroBias});
+  Value relu = rewrite.createReluOp(type, zeroConv);
   // add zero conv
-  // Value float0 = rewrite.createFloatOp(0);
   Value int1 = rewrite.createIntOp(1);
-  Value skip =
-      rewrite.createAddTensorOp(zeroConv.getType(), oldInput, zeroConv, int1);
-  // replace old conv
-  rewrite.replaceConvOp(skip);
+  Value skip = rewrite.createAddTensorOp(oldResult, relu, int1);
+  relu = rewrite.createReluOp(type, skip);
+  // reshape back to origin shape
+  if (needReshape)
+    relu = rewrite.createReshape(oldShape, relu);
+  rewrite.replaceOp(relu);
 }
 
 use_pass(InsertSkip, 1, int, layer);

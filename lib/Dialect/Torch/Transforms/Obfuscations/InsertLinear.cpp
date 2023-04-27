@@ -11,17 +11,6 @@
 #include <cstdlib>
 #include <ctime>
 
-#include "mlir/IR/BuiltinDialect.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
-#include "torch-mlir/Dialect/Torch/IR/TorchTypes.h"
-#include "torch-mlir/Dialect/Torch/Transforms/Passes.h"
-#include "torch-mlir/Dialect/Torch/Utils/Utils.h"
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/ADT/StringSet.h"
-
 using namespace mlir;
 using namespace mlir::torch;
 using namespace mlir::torch::Torch;
@@ -192,8 +181,7 @@ static std::vector<long> createNewShape(std::vector<long> shapeOrigin) {
   return shapeNew;
 }
 
-static std::vector<Value> createABCD(IRRewriter &rewriter, Location loc,
-                                     MLIRContext *context, long N) {
+static std::vector<Value> createABCD(RewriteOp &rewrite, long N) {
   std::vector<long> shapeWeight{N, N};
   std::vector<long> shapeBias = {N};
 
@@ -219,147 +207,60 @@ static std::vector<Value> createABCD(IRRewriter &rewriter, Location loc,
     D[i] = -sum;
   }
 
-  // weight A
-  Value weightA = createTensor(rewriter, loc, context, shapeWeight,
-                               std::vector<float>(A, A + N * N));
-  Value biasB = createTensor(rewriter, loc, context, shapeBias,
-                             std::vector<float>(B, B + N));
-  Value weightC = createTensor(rewriter, loc, context, shapeWeight,
-                               std::vector<float>(C, C + N * N));
-  Value biasD = createTensor(rewriter, loc, context, shapeBias,
-                             std::vector<float>(D, D + N));
+  // to tensor
+  auto tensorA = std::vector<float>(A, A + N * N);
+  auto tensorB = std::vector<float>(B, B + N);
+  auto tensorC = std::vector<float>(C, C + N * N);
+  auto tensorD = std::vector<float>(D, D + N);
+
+  Value weightA = rewrite.createTensorOp(shapeWeight, tensorA);
+  Value biasB = rewrite.createTensorOp(shapeBias, tensorB);
+  Value weightC = rewrite.createTensorOp(shapeWeight, tensorC);
+  Value biasD = rewrite.createTensorOp(shapeBias, tensorD);
+
   return std::vector<Value>{weightA, biasB, weightC, biasD};
 }
 
-static void insertLinearRNN(MLIRContext *context,
-                            SmallPtrSet<Operation *, 16> opWorklist) {
-  // insert 2 linear layer for every op in opWorklist
-  // special for RNN: hidden layer in loop share the same weight
-  // prerequest: all ops in opWorklist is same op in unrolling RNN loop
+// insert 2 linear after relu on the layer
+static void InsertLinear(MLIRContext *context, Operation *f, int layer) {
+  // input test
+  input_assert(layer < 1, "layer > 0 \n");
+  // get operations that you need
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
+    return;
+  int type = getReluType(op);
+  // init rewrite
+  RewriteOp rewrite(context, op);
+  // get output tensor
+  auto newOp = rewrite.cloneOp();
+  Value oldResult = newOp->getResult(0);
 
-  IRRewriter rewriter(context);
-  Operation *op = *opWorklist.begin();
-  rewriter.setInsertionPoint(op);
-  Location loc = op->getLoc();
-
-  // create reusable ops
-  Value int1 = rewriter.create<ConstantIntOp>(op->getLoc(),
-                                              rewriter.getI64IntegerAttr(1));
-  std::vector<long> shapeOrigin =
-      op->getResult(0).getType().cast<ValueTensorType>().getSizes().vec();
-  std::vector<long> shapeNew;
-  bool needReshape = true;
-  if (shapeOrigin.size() == 2) {
-    needReshape = false;
-    shapeNew = shapeOrigin;
-  } else {
-    shapeNew = createNewShape(shapeOrigin);
+  // get std shape
+  auto oldShape = getShape(oldResult);
+  std::vector<int64_t> shape = oldShape;
+  bool needReshape = false;
+  if (oldShape.size() != 2) {
+    needReshape = true;
+    shape = createNewShape(oldShape);
+    oldResult = rewrite.createReshape(shape, oldResult);
   }
-  std::vector<Value> values = createABCD(rewriter, loc, context, shapeNew[1]);
 
-  for (auto op : opWorklist) {
-    rewriter.setInsertionPointAfter(op);
-    // copy op, for convinience of replace use of op
-    Operation *newOp = rewriter.clone(*op);
-    Location loc = newOp->getLoc();
-    Value rst = newOp->getResult(0);
+  auto values = createABCD(rewrite, shape[1]);
+  Value int1 = rewrite.createIntOp(1);
+  // create first linear
+  Value rst = rewrite.createMmOp(oldResult, values[0]);
+  rst = rewrite.createAddTensorOp(rst, values[1], int1);
+  Value relu = rewrite.createReluOp(type, rst);
+  // create second linear
+  rst = rewrite.createMmOp(relu, values[2]);
+  rst = rewrite.createAddTensorOp(rst, values[3], int1);
+  relu = rewrite.createReluOp(type, rst);
 
-    if (needReshape)
-      rst = createReshape(rewriter, loc, context, shapeNew, rst);
-    // create 2 linear layer
-    rst = rewriter.create<AtenMmOp>(loc, rst.getType(), rst, values[0]);
-    rst = rewriter.create<AtenAddTensorOp>(loc, rst.getType(), rst, values[1],
-                                           int1);
-    rst = rewriter.create<AtenReluOp>(loc, rst.getType(), rst);
-    rst = rewriter.create<AtenMmOp>(loc, rst.getType(), rst, values[2]);
-    rst = rewriter.create<AtenAddTensorOp>(loc, rst.getType(), rst, values[3],
-                                           int1);
-    rst = rewriter.create<AtenReluOp>(loc, rst.getType(), rst);
-    // reshape back
-    if (needReshape)
-      rst = createReshape(rewriter, loc, context, shapeOrigin, rst);
-
-    rewriter.replaceOp(op, rst);
-  }
+  // reshape back to origin shape
+  if (needReshape)
+    relu = rewrite.createReshape(oldShape, relu);
+  rewrite.replaceOp(relu);
 }
 
-static void insertLinear(MLIRContext *context,
-                         llvm::SmallPtrSet<Operation *, 16> opWorklist) {
-  // insert 2 linear layer for every op in opWorklist
-
-  IRRewriter rewriter(context);
-
-  for (auto op : opWorklist) {
-    rewriter.setInsertionPointAfter(op);
-    // copy op, for convinience of replace use of op
-    Operation *newOp = rewriter.clone(*op);
-    Location loc = newOp->getLoc();
-    Value rst = newOp->getResult(0);
-
-    Value int1 = rewriter.create<ConstantIntOp>(op->getLoc(),
-                                                rewriter.getI64IntegerAttr(1));
-    std::vector<long> shapeOrigin =
-        op->getResult(0).getType().cast<ValueTensorType>().getSizes().vec();
-    std::vector<long> shapeNew;
-    bool needReshape = true;
-    if (shapeOrigin.size() == 2) {
-      needReshape = false;
-      shapeNew = shapeOrigin;
-    } else {
-      shapeNew = createNewShape(shapeOrigin);
-    }
-    std::vector<Value> values = createABCD(rewriter, loc, context, shapeNew[1]);
-
-    if (needReshape)
-      rst = createReshape(rewriter, loc, context, shapeNew, rst);
-    // create 2 linear layer
-    rst = rewriter.create<AtenMmOp>(loc, rst.getType(), rst, values[0]);
-    rst = rewriter.create<AtenAddTensorOp>(loc, rst.getType(), rst, values[1],
-                                           int1);
-    rst = rewriter.create<AtenReluOp>(loc, rst.getType(), rst);
-    rst = rewriter.create<AtenMmOp>(loc, rst.getType(), rst, values[2]);
-    rst = rewriter.create<AtenAddTensorOp>(loc, rst.getType(), rst, values[3],
-                                           int1);
-    rst = rewriter.create<AtenReluOp>(loc, rst.getType(), rst);
-    // reshape back
-    if (needReshape)
-      rst = createReshape(rewriter, loc, context, shapeOrigin, rst);
-
-    rewriter.replaceOp(op, rst);
-  }
-}
-
-namespace {
-class InsertLinearPass : public InsertLinearBase<InsertLinearPass> {
-public:
-  InsertLinearPass() = default;
-  InsertLinearPass(std::string net) { this->net = net; }
-  void runOnOperation() override {
-    auto f = getOperation();
-    llvm::SmallPtrSet<Operation *, 16> opWorklist = getPositiveLayers(f);
-    MLIRContext *context = &getContext();
-
-    if (opWorklist.empty()) {
-      llvm::errs() << "Not run InsertLinear\n";
-      return;
-    }
-
-    if (net == "") {
-      // todo: opWorklist too large will cause precision error
-      while (opWorklist.size() >= 3)
-        opWorklist.erase(*opWorklist.begin());
-      insertLinear(context, opWorklist);
-    } else if (net == "RNN") {
-      insertLinearRNN(context, opWorklist);
-    } else {
-      llvm::errs() << "unsupported net: " << net << "\n";
-      return;
-    }
-  }
-};
-} // namespace
-
-std::unique_ptr<OperationPass<func::FuncOp>>
-mlir::torch::Torch::createInsertLinearPass(std::string net) {
-  return std::make_unique<InsertLinearPass>(net);
-}
+use_pass(InsertLinear, 1, int, layer);

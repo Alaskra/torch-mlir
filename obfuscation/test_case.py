@@ -6,18 +6,18 @@ tu = TestUtils()
 GLOBAL_TEST_REGISTRY = []
 # the tests that failed currently, if bug is fixed, remove it
 TEST_NOT_RUN = [
-    "RNNInsertSkip",
-    "RNNInsertSepraConv",
+    #    "RNNInsertSkip",
+    #    "RNNInsertSepraConv",
     "RNNInsertInception",
     "RNNInsertRNN",
     "RNNInsertRNNWithZeros",
-    "LSTMInsertSkip",
-    "LSTMInsertSepraConv",
+    #    "LSTMInsertSkip",
+    #    "LSTMInsertSepraConv",
     "LSTMInsertInception",
     "LSTMInsertRNN",
     "LSTMInsertRNNWithZeros",
-    "GRUInsertSkip",
-    "GRUInsertSepraConv",
+    #    "GRUInsertSkip",
+    #    "GRUInsertSepraConv",
     "GRUInsertInception",
     "GRUInsertRNN",
     "GRUInsertRNNWithZeros",
@@ -57,9 +57,9 @@ def addGlobalTest(name, model, inputs, passes):
 # These obfuscations can apply to all models, include LeNet, RNN, LSTM, GRU
 general_obfuscation = {
     "InsertSkip": ["torch-insert-skip{layer=2}"],
-    "InsertConv": ["torch-insert-conv"],
+    "InsertConv": ["torch-insert-conv{layer=2}"],
     "InsertSepraConv": ["torch-insert-sepra-conv-layer{layer=2}"],
-    "InsertLinear": ["torch-insert-linear"],
+    "InsertLinear": ["torch-insert-linear{layer=2}"],
     "ValueSplit": ["torch-value-split"],
     "MaskSplit": ["torch-mask-split"],
     "InsertInception": ["torch-insert-Inception{number=5}"],
@@ -109,14 +109,6 @@ def addRNNTests():
     addRNNTest(
         "RNNMaskSplitRNN",
         ["torch-mask-split{net=RNN number=5}"],
-    )
-    addRNNTest(
-        "RNNInsertConvRNN",
-        ["torch-insert-conv{net=RNN}"],
-    )
-    addRNNTest(
-        "RNNInsertLinearRNN",
-        ["torch-insert-linear{net=RNN}"],
     )
 
 
