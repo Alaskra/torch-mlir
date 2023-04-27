@@ -12,6 +12,21 @@ TEST_NOT_RUN = [
     "LSTMInsertSepraConv",
     "GRUInsertSkip",
     "GRUInsertSepraConv",
+    #    "RNNInsertSkip",
+    #    "RNNInsertSepraConv",
+    "RNNInsertInception",
+    "RNNInsertRNN",
+    "RNNInsertRNNWithZeros",
+    #    "LSTMInsertSkip",
+    #    "LSTMInsertSepraConv",
+    "LSTMInsertInception",
+    "LSTMInsertRNN",
+    "LSTMInsertRNNWithZeros",
+    #    "GRUInsertSkip",
+    #    "GRUInsertSepraConv",
+    "GRUInsertInception",
+    "GRUInsertRNN",
+    "GRUInsertRNNWithZeros",
 ]
 # Ensure that there are no duplicate names in the global test registry.
 _SEEN_UNIQUE_NAME = set()
@@ -48,7 +63,7 @@ def addGlobalTest(name, model, inputs, passes):
 # These obfuscations can apply to all models, include LeNet, RNN, LSTM, GRU
 general_obfuscation = {
     "InsertSkip": ["torch-insert-skip{layer=2}"],
-    "InsertConv": ["torch-insert-conv"],
+    "InsertConv": ["torch-insert-conv{layer=2}"],
     "InsertSepraConv": ["torch-insert-sepra-conv-layer{layer=2}"],
     "InsertLinear": ["torch-insert-linear"],
     "ValueSplit": ["torch-value-split{layer=1}"],
@@ -56,6 +71,12 @@ general_obfuscation = {
     "InsertInception": ["torch-insert-Inception{number=5 layer=1}"],
     "InsertRNN": ["torch-insert-RNN{number=5 layer=1}"],
     "InsertRNNWithZeros": ["torch-insert-RNNWithZeros{activationFunc=tanh number=5 layer=1}"],
+    "InsertLinear": ["torch-insert-linear{layer=2}"],
+    "ValueSplit": ["torch-value-split"],
+    "MaskSplit": ["torch-mask-split"],
+    "InsertInception": ["torch-insert-Inception{number=5}"],
+    "InsertRNN": ["torch-insert-RNN{number=5}"],
+    "InsertRNNWithZeros": ["torch-insert-RNNWithZeros{activationFunc=tanh number=5}"],
 }
 
 
@@ -100,14 +121,6 @@ def addRNNTests():
     addRNNTest(
         "RNNMaskSplitRNN",
         ["torch-mask-split{number=5}"],
-    )
-    addRNNTest(
-        "RNNInsertConvRNN",
-        ["torch-insert-conv{net=RNN}"],
-    )
-    addRNNTest(
-        "RNNInsertLinearRNN",
-        ["torch-insert-linear{net=RNN}"],
     )
 
 

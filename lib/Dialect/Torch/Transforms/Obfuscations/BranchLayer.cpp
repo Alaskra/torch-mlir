@@ -10,25 +10,39 @@
 
 #include "Common.h"
 
-// branch the colored layer and insert a
-// convolution into the left branch.
+// insert one convolution
+static Value InertOneConv(RewriteOp &rewrite, vector<int64_t> shape,
+                          Value inputOp) {
+  // get one kernel
+  shape[0] = shape[1];
+  shape[2] = shape[3] = 1;
+  int kernelSize = getKernelSize(shape);
+  std::vector<float> oneKernelVec(kernelSize, 0);
+  creatOneTensor(oneKernelVec, shape[0]);
+  Value oneKernel = rewrite.createTensorOp(shape, oneKernelVec);
+  // get zero bias
+  toBiasShape(shape);
+  std::vector<float> zeroBiasVec(shape[0], 0);
+  Value zeroBias = rewrite.createTensorOp(shape, zeroBiasVec);
+  // get one conv
+  return rewrite.createConvOp({inputOp, oneKernel, zeroBias});
+}
+
+// branch the layer and insert a
+// convolution into the branchs randomly.
 static void BranchLayer(MLIRContext *context, Operation *f, int layer,
                         int branch) {
   // input test
   input_assert(branch < 2, "branch > 1 \n");
   input_assert(layer < 1, "layer > 0 \n");
   // get operations that you need
-  OpList oplist;
-  bool is_get = getConvOp(oplist, f, layer);
-  if (!is_get)
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
     return;
-  // get convolution operations
-  auto it = oplist.begin();
-  AtenConvolutionOp convOp = llvm::dyn_cast<AtenConvolutionOp>(*it);
+  int type = getReluType(op);
   const int dim = 1;
   // get input information
-  Value oldInputOp = convOp.getOperand(0);
-  auto inputShape = getShape(oldInputOp);
+  auto inputShape = getShape(op->getResult(0));
   int inputChannels = inputShape[dim];
   // branch test: channels
   llvm_assert(inputChannels < 2, "error: input_channels(%d) <= 1 \n",
@@ -37,7 +51,10 @@ static void BranchLayer(MLIRContext *context, Operation *f, int layer,
               "error: input_channels(%d) <= branch(%d) \n", inputChannels,
               branch);
   // init rewrite
-  RewriteOp rewrite(context, convOp);
+  RewriteOp rewrite(context, op);
+  // get output tensor
+  auto newOp = rewrite.cloneOp();
+  Value oldResult = newOp->getResult(0);
 
   // slice randomly
   std::vector<int> branchChannel(branch);
@@ -55,12 +72,10 @@ static void BranchLayer(MLIRContext *context, Operation *f, int layer,
   // slice tensors
   std::vector<std::vector<int64_t>> branchShape(branch);
   std::vector<Value> branchTensorOp(branch);
-
   int curChannel = 0; // current channel
   Value startOp;
   Value endOp = rewrite.createIntOp(curChannel);
   Value dimOp = rewrite.createIntOp(dim);
-
   for (int i = 0; i < branch; i++) {
     // get shape
     branchShape[i] = inputShape;
@@ -69,39 +84,27 @@ static void BranchLayer(MLIRContext *context, Operation *f, int layer,
     startOp = endOp;
     curChannel += branchChannel[i];
     endOp = rewrite.createIntOp(curChannel);
-    branchTensorOp[i] = rewrite.createSliceTensorOp(branchShape[i], oldInputOp,
+    branchTensorOp[i] = rewrite.createSliceTensorOp(branchShape[i], oldResult,
                                                     dimOp, startOp, endOp);
   }
 
   // handle every branch tensor randomly
-  int handleWay; // 0: nop, 1: insertSeparaConv
+  int handleWay;
   srand(time(0));
   for (int i = 0; i < branch; i++) {
     handleWay = rand() % 2;
+    // 0: nop
     if (handleWay == 0)
       continue;
-    // insert a separable convolution
-
-    // get one kernel
-    auto shape = branchShape[i];
-    toStdShape(shape);
-    int kernelSize = getKernelSize(shape);
-    std::vector<float> oneKernelVec(kernelSize, 0);
-    creatOneTensor(oneKernelVec, shape[0]);
-    Value oneKernel = rewrite.createTensorOp(shape, oneKernelVec);
-    // get zero bias
-    toBiasShape(shape);
-    std::vector<float> zeroBiasVec(shape[0], 0);
-    Value zeroBias = rewrite.createTensorOp(shape, zeroBiasVec);
-    // insert new conv
+    // 1: insert one convolution
     branchTensorOp[i] =
-        rewrite.createConvOp(branchTensorOp[i], oneKernel, zeroBias);
+        InertOneConv(rewrite, branchShape[i], branchTensorOp[i]);
   }
 
   // cat branch tensors
-  Value catOp = rewrite.creatCatTensorOp(inputShape, dimOp, branchTensorOp);
-  // replace old conv
-  rewrite.replaceConvOp(catOp);
+  Value catOp = rewrite.createCatTensorOp(inputShape, dimOp, branchTensorOp);
+  Value relu = rewrite.createReluOp(type, catOp);
+  rewrite.replaceOp(relu);
 }
 
 use_pass(BranchLayer, 2, int, layer, int, branch);
