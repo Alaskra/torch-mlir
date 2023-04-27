@@ -341,13 +341,11 @@ def InsertInception : Pass<"torch-insert-Inception", "func::FuncOp"> {
 def InsertConv : Pass<"torch-insert-conv", "func::FuncOp"> {
   let summary = "Insert equivalent convolutions";
   let constructor = [{
-    mlir::torch::Torch::createInsertConvPass(/*net=*/"", /*layer=*/1)
+    mlir::torch::Torch::createInsertConvPass(/*layer=*/1)
   }];
   let description = [{
   }];
   let options = [
-    Option<"net", "net", "std::string", /*default=*/"",
-           "specify net to apply, options avaliable: RNN">,
     Option<"layer", "layer", "int", /*default=*/"1", "layer to insert">
   ];
 }
@@ -355,13 +353,11 @@ def InsertConv : Pass<"torch-insert-conv", "func::FuncOp"> {
 def InsertLinear : Pass<"torch-insert-linear", "func::FuncOp"> {
   let summary = "Insert equivalent linears";
   let constructor = [{
-    mlir::torch::Torch::createInsertLinearPass(/*net=*/"", /*layer=*/1)
+    mlir::torch::Torch::createInsertLinearPass(/*layer=*/1)
   }];
   let description = [{
   }];
   let options = [
-    Option<"net", "net", "std::string", /*default=*/"",
-           "specify net to apply, options avaliable: RNN">,
     Option<"layer", "layer", "int", /*default=*/"1", "layer to insert">
   ];
 }

@@ -14,11 +14,10 @@ static void InsertSkip(MLIRContext *context, Operation *f, int layer) {
   // input test
   input_assert(layer < 1, "layer > 0 \n");
   // get operations that you need
-  OpList oplist;
-  int type = getReluOp(oplist, f, layer);
-  if (!type) return;
-  // get relu operations
-  auto op = *oplist.begin();
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
+    return;
+  int type = getReluType(op);
   // init rewrite
   RewriteOp rewrite(context, op);
   // get output tensor

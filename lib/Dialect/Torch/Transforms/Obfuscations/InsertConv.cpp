@@ -15,7 +15,8 @@ using namespace mlir;
 using namespace mlir::torch;
 using namespace mlir::torch::Torch;
 
-static std::vector<Value> createABCD(RewriteOp &rewrite, long channelSz, long kernelSz) {
+static std::vector<Value> createABCD(RewriteOp &rewrite, long channelSz,
+                                     long kernelSz) {
   // generate A, B, C, D, satisfy C(Ax+B)+D == x
   float A = (rand() % 100 + 1) / 100.0;
   float C = 1 / A;
@@ -49,17 +50,15 @@ static std::vector<Value> createABCD(RewriteOp &rewrite, long channelSz, long ke
   return std::vector<Value>{kernelA, biasB, kernelC, biasD};
 }
 
-
 // insert 2 convolutions after relu on the layer
-void InsertConv(MLIRContext *context, Operation *f, std::string net, int layer) {
+void InsertConv(MLIRContext *context, Operation *f, int layer) {
   // input test
   input_assert(layer < 1, "layer > 0 \n");
   // get operations that you need
-  OpList oplist;
-  int type = getReluOp(oplist, f, layer);
-  if (!type) return;
-  // get relu operations
-  auto op = *oplist.begin();
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
+    return;
+  int type = getReluType(op);
   // init rewrite
   RewriteOp rewrite(context, op);
   // get output tensor
@@ -88,16 +87,17 @@ void InsertConv(MLIRContext *context, Operation *f, std::string net, int layer) 
   std::vector<int64_t> intParam{stride, pad, dil, group};
 
   // create first conv
-  Value conv = rewrite.createConvOp({oldResult, values[0], values[1]}, intParam);
+  Value conv =
+      rewrite.createConvOp({oldResult, values[0], values[1]}, intParam);
   Value relu = rewrite.createReluOp(type, conv);
   // create second conv
   conv = rewrite.createConvOp({relu, values[2], values[3]}, intParam);
   relu = rewrite.createReluOp(type, conv);
-  
+
   // reshape back to origin shape
   if (needReshape)
     relu = rewrite.createReshape(oldShape, relu);
   rewrite.replaceOp(relu);
 }
 
-use_pass(InsertConv, 2, std::string, net, int, layer);
+use_pass(InsertConv, 1, int, layer);

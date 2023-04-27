@@ -10,9 +10,9 @@
 
 #include "Common.h"
 
-
 // insert one convolution
-static Value InertOneConv(RewriteOp &rewrite, vector<int64_t> shape, Value inputOp) {
+static Value InertOneConv(RewriteOp &rewrite, vector<int64_t> shape,
+                          Value inputOp) {
   // get one kernel
   shape[0] = shape[1];
   shape[2] = shape[3] = 1;
@@ -25,21 +25,21 @@ static Value InertOneConv(RewriteOp &rewrite, vector<int64_t> shape, Value input
   std::vector<float> zeroBiasVec(shape[0], 0);
   Value zeroBias = rewrite.createTensorOp(shape, zeroBiasVec);
   // get one conv
-  return  rewrite.createConvOp({inputOp, oneKernel, zeroBias});
+  return rewrite.createConvOp({inputOp, oneKernel, zeroBias});
 }
 
 // branch the layer and insert a
 // convolution into the branchs randomly.
-static void BranchLayer(MLIRContext *context, Operation *f, int layer, int branch) {
+static void BranchLayer(MLIRContext *context, Operation *f, int layer,
+                        int branch) {
   // input test
   input_assert(branch < 2, "branch > 1 \n");
   input_assert(layer < 1, "layer > 0 \n");
   // get operations that you need
-  OpList oplist;
-  int type = getReluOp(oplist, f, layer);
-  if (!type) return;
-  // get relu operations
-  auto op = *oplist.begin();
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
+    return;
+  int type = getReluType(op);
   const int dim = 1;
   // get input information
   auto inputShape = getShape(op->getResult(0));
@@ -84,8 +84,8 @@ static void BranchLayer(MLIRContext *context, Operation *f, int layer, int branc
     startOp = endOp;
     curChannel += branchChannel[i];
     endOp = rewrite.createIntOp(curChannel);
-    branchTensorOp[i] = rewrite.createSliceTensorOp(
-                branchShape[i], oldResult, dimOp, startOp, endOp);
+    branchTensorOp[i] = rewrite.createSliceTensorOp(branchShape[i], oldResult,
+                                                    dimOp, startOp, endOp);
   }
 
   // handle every branch tensor randomly
@@ -94,9 +94,11 @@ static void BranchLayer(MLIRContext *context, Operation *f, int layer, int branc
   for (int i = 0; i < branch; i++) {
     handleWay = rand() % 2;
     // 0: nop
-    if (handleWay == 0) continue;
+    if (handleWay == 0)
+      continue;
     // 1: insert one convolution
-    branchTensorOp[i] = InertOneConv(rewrite, branchShape[i], branchTensorOp[i]);
+    branchTensorOp[i] =
+        InertOneConv(rewrite, branchShape[i], branchTensorOp[i]);
   }
 
   // cat branch tensors

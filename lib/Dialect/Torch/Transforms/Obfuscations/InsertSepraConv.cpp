@@ -10,15 +10,14 @@
 #include "Common.h"
 
 // insert two separable convolution: deep-wise, point-wise
-static void InsertSepraConv(MLIRContext *context, Operation *f, int layer) { 
+static void InsertSepraConv(MLIRContext *context, Operation *f, int layer) {
   // input test
   input_assert(layer < 1, "layer > 0 \n");
   // get operations that you need
-  OpList oplist;
-  int type = getReluOp(oplist, f, layer);
-  if (!type) return;
-  // get relu operations
-  auto op = *oplist.begin();
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
+    return;
+  int type = getReluType(op);
   // init rewrite
   RewriteOp rewrite(context, op);
   // get output tensor
@@ -26,7 +25,7 @@ static void InsertSepraConv(MLIRContext *context, Operation *f, int layer) {
   Value oldResult = newOp->getResult(0);
 
   // deep-wise convolution, (out, in, 1, 1), group = in_channel
-  
+
   // get std shape
   auto oldShape = getShape(oldResult);
   std::vector<int64_t> shape = oldShape;
@@ -48,9 +47,10 @@ static void InsertSepraConv(MLIRContext *context, Operation *f, int layer) {
   std::vector<float> zeroBiasVec(shape[0], 0);
   Value zeroBias = rewrite.createTensorOp(shape, zeroBiasVec);
   // insert deep-wise conv
-  Value deepConv = rewrite.createConvOp({oldResult, deepKernel, zeroBias}, {1, 0, 1, group});
+  Value deepConv =
+      rewrite.createConvOp({oldResult, deepKernel, zeroBias}, {1, 0, 1, group});
   Value relu = rewrite.createReluOp(type, deepConv);
-  
+
   // point-wise convolution, (in, in, 1, 1), group = 1
   // get point-wise kernel
   shape = getShape(oldResult);

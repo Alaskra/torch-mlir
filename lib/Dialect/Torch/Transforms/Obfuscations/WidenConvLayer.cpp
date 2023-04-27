@@ -9,17 +9,18 @@
 
 #include "Common.h"
 
-
 // widen two convolution layer by adding channels
 // randomly copy channel to new channels
-static void WidenConvLayer(MLIRContext *context, Operation *f, int layer, int number) {
-// input test
+static void WidenConvLayer(MLIRContext *context, Operation *f, int layer,
+                           int number) {
+  // input test
   input_assert(layer < 1, "layer > 0 \n");
   input_assert(number < 1, "number > 0 \n");
   // get operations between two convolution(include convolutions)
   OpList oplist;
   int is_get = getConvMiddleOps(oplist, f, layer);
-  if (!is_get) return;
+  if (!is_get)
+    return;
   // get the first convolution
   auto it = oplist.begin();
   // init rewrite
@@ -50,8 +51,8 @@ static void WidenConvLayer(MLIRContext *context, Operation *f, int layer, int nu
   shape[0] = shape[0] + number;
   for (auto channel : randomChannel) {
     auto base = channel * channelSize;
-    kernelVec.insert(kernelVec.end(), kernelVec.begin() + base, 
-                  kernelVec.begin() + base + channelSize);
+    kernelVec.insert(kernelVec.end(), kernelVec.begin() + base,
+                     kernelVec.begin() + base + channelSize);
   }
   // replace old kernel tensor
   rewrite.replaceTensorOp(oldKernelTensor, shape, kernelVec);
@@ -112,12 +113,12 @@ static void WidenConvLayer(MLIRContext *context, Operation *f, int layer, int nu
       }
     }
     // copy
-    newKernelVec.insert(newKernelVec.end(), kernelVec.begin() + base, 
-                  kernelVec.begin() + base + channelSize);
+    newKernelVec.insert(newKernelVec.end(), kernelVec.begin() + base,
+                        kernelVec.begin() + base + channelSize);
     for (auto channel : randomChannel) {
       auto begin = base + channel * hwSize;
-      newKernelVec.insert(newKernelVec.end(), kernelVec.begin() + begin, 
-                    kernelVec.begin() + begin + hwSize);
+      newKernelVec.insert(newKernelVec.end(), kernelVec.begin() + begin,
+                          kernelVec.begin() + begin + hwSize);
     }
   }
   shape[1] = shape[1] + number;

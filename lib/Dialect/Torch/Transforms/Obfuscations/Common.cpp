@@ -1,7 +1,6 @@
 #include "Common.h"
 
 // frequently-used function about getting ops
-
 bool getConvMiddleOps(OpList &oplist, Operation *f, int layer) {
   int convLayer = layer;
   f->walk([&](Operation *op) {
@@ -14,37 +13,38 @@ bool getConvMiddleOps(OpList &oplist, Operation *f, int layer) {
       oplist.insert(op);
   });
   // input test
-  input_assert_ret(convLayer > -1, false, 
-        "layer < max_layer(%d) \n", (layer - convLayer));
+  input_assert_ret(convLayer > -1, false, "layer < max_layer(%d) \n",
+                   (layer - convLayer));
   return true;
 }
 
-#define ReluList    AtenReluOp, AtenSigmoidOp
-#define LeakyReluList   AtenTanhOp
-#define AllReluList   ReluList, LeakyReluList
-int getReluOp(OpList &oplist, Operation *f, int layer) {
+#define ReluList AtenReluOp, AtenSigmoidOp
+#define LeakyReluList AtenTanhOp
+#define AllReluList ReluList, LeakyReluList
+Operation *getReluOp(Operation *f, int layer) {
   int rlayer = layer;
-  int type = 0;
+  Operation *reluOp = nullptr;
   f->walk([&](Operation *op) {
     if (isa<AllReluList>(op)) {
       rlayer--;
       auto resType = op->getResult(0).getType();
       if (rlayer == 0 && resType.isa<ValueTensorType>()) {
-        oplist.insert(op);
-        if (isa<AllReluList>(op)) {
-          type = 1;
-        } else {
-          type = 2;
-        }
+        reluOp = op;
       }
     }
   });
   // input test
-  input_assert_ret(rlayer > 0, type, 
-      "layer <= max_layer(%d) \n", (layer - rlayer));
+  if (rlayer > 0) {
+    printf("layer <= max_layer(%d) \n", (layer - rlayer));
+  }
+  return reluOp;
+}
+int getReluType(Operation *reluOp) {
+  int type = 1;
+  if (isa<LeakyReluList>(reluOp))
+    type = 2;
   return type;
 }
-
 
 // frequently-used function about tensor and shape
 vector<int64_t> getShape(Value tensorOp) {
@@ -84,8 +84,7 @@ void copyTensor(std::vector<float> &ktensor, ValueTensorLiteralOp tensor) {
   }
 }
 
-
-// zwj: frequently-used function 
+// zwj: frequently-used function
 Value createTensor(IRRewriter &rewriter, Location loc, MLIRContext *context,
                    std::vector<long> shape, std::vector<float> weight) {
   auto resultTensorType = ValueTensorType::get(context, llvm::ArrayRef(shape),
@@ -124,51 +123,54 @@ llvm::SmallPtrSet<Operation *, 16> getPositiveLayers(Operation *f) {
   return opWorklist;
 }
 
-
-
 // frequently-used class about rewriter
-RewriteOp::RewriteOp(MLIRContext *context, Operation *op)  :
-      context(context), rewriter(context), loc(op->getLoc()), op(op) {
+RewriteOp::RewriteOp(MLIRContext *context, Operation *op)
+    : context(context), rewriter(context), loc(op->getLoc()), op(op) {
   rewriter.setInsertionPoint(op);
 }
-Operation *RewriteOp::cloneOp() {
-  return rewriter.clone(*(this->op));
-}
+Operation *RewriteOp::cloneOp() { return rewriter.clone(*(this->op)); }
 // create operations
 Value RewriteOp::createBoolOp(bool value) {
   return rewriter.create<ConstantBoolOp>(this->loc, value);
 }
 Value RewriteOp::createIntOp(int64_t value) {
-  return rewriter.create<ConstantIntOp>(this->loc, rewriter.getI64IntegerAttr(value));
+  return rewriter.create<ConstantIntOp>(this->loc,
+                                        rewriter.getI64IntegerAttr(value));
 }
 Value RewriteOp::createFloatOp(double value) {
-  return rewriter.create<ConstantFloatOp>(this->loc, rewriter.getF64FloatAttr(value));
+  return rewriter.create<ConstantFloatOp>(this->loc,
+                                          rewriter.getF64FloatAttr(value));
 }
 Value RewriteOp::createTensorOp(vector<int64_t> shape, vector<float> tensor) {
   auto tensorType = getValueTensorType(shape);
   auto tensorDense = getTensorDense(shape, tensor);
-  return rewriter.create<ValueTensorLiteralOp>(this->loc, tensorType, tensorDense);
+  return rewriter.create<ValueTensorLiteralOp>(this->loc, tensorType,
+                                               tensorDense);
 }
 Value RewriteOp::createAddTensorOp(Value tensor1, Value tensor2, Value alpha) {
-  return rewriter.create<AtenAddTensorOp>(this->loc, tensor1.getType(), tensor1, tensor2, alpha);
+  return rewriter.create<AtenAddTensorOp>(this->loc, tensor1.getType(), tensor1,
+                                          tensor2, alpha);
 }
-Value RewriteOp::createSliceTensorOp(vector<int64_t> branchShape, Value input, Value dim, Value start, Value end) {
+Value RewriteOp::createSliceTensorOp(vector<int64_t> branchShape, Value input,
+                                     Value dim, Value start, Value end) {
   auto branchTensorType = getValueTensorType(branchShape);
   auto step = createIntOp(1);
-  return rewriter.create<AtenSliceTensorOp>(
-      this->loc, branchTensorType, input, dim, start, end, step);
+  return rewriter.create<AtenSliceTensorOp>(this->loc, branchTensorType, input,
+                                            dim, start, end, step);
 }
 Value RewriteOp::createListOp(Type elemType, vector<Value> elemVec) {
   return rewriter.create<PrimListConstructOp>(
       this->loc, ListType::get(elemType), ValueRange(elemVec));
 }
-Value RewriteOp::createCatTensorOp(vector<int64_t> resultShape, Value dim, vector<Value> tensorVec) {
+Value RewriteOp::createCatTensorOp(vector<int64_t> resultShape, Value dim,
+                                   vector<Value> tensorVec) {
   auto vtensorType = getLeastValueTensorType();
   auto tensorList = createListOp(vtensorType, tensorVec);
   auto resultType = getValueTensorType(resultShape);
   return rewriter.create<AtenCatOp>(this->loc, resultType, tensorList, dim);
 }
-Value RewriteOp::createConvOp(Type result, ValueRange tensorParam, vector<int64_t> intParam) {
+Value RewriteOp::createConvOp(Type result, ValueRange tensorParam,
+                              vector<int64_t> intParam) {
   Type intType = IntType::get(this->context);
   // intParam: stride, pad, dil, group
   Value strideOp = createIntOp(intParam[0]);
@@ -182,23 +184,20 @@ Value RewriteOp::createConvOp(Type result, ValueRange tensorParam, vector<int64_
   Value groupOp = createIntOp(intParam[3]);
   // tensorParam: input, weight, bias
   return rewriter.create<AtenConvolutionOp>(
-      this->loc, result, tensorParam[0], tensorParam[1], tensorParam[2], 
+      this->loc, result, tensorParam[0], tensorParam[1], tensorParam[2],
       liststrideOp, listPadOp, listDilOp, transOp, outPadOp, groupOp);
 }
-Value RewriteOp::createConvOp(ValueRange tensorParam, vector<int64_t> intParam) {
+Value RewriteOp::createConvOp(ValueRange tensorParam,
+                              vector<int64_t> intParam) {
   return createConvOp(tensorParam[0].getType(), tensorParam, intParam);
 }
-Value RewriteOp::createConvOp(Type result, ValueRange tensorParam) {
-  return createConvOp(result, tensorParam, {1, 0, 1, 1});
-}
-Value RewriteOp::createConvOp(ValueRange tensorParam) {
-  return createConvOp(tensorParam, {1, 0, 1, 1});
-}
+
 Value RewriteOp::createReluOp(Value inputOp) {
   return rewriter.create<AtenReluOp>(this->loc, inputOp.getType(), inputOp);
 }
 Value RewriteOp::createLeakyReluOp(Value inputOp, Value nslope) {
-  return rewriter.create<AtenLeakyReluOp>(this->loc, inputOp.getType(), inputOp, nslope);
+  return rewriter.create<AtenLeakyReluOp>(this->loc, inputOp.getType(), inputOp,
+                                          nslope);
 }
 Value RewriteOp::createLeakyReluOp(Value inputOp) {
   Value nslope = createFloatOp(1e-02);
@@ -222,7 +221,7 @@ Value RewriteOp::createReshape(vector<long> shape, Value originOp) {
   auto intType = IntType::get(this->context);
   Value listShapeOp = createListOp(intType, values);
   auto resType = getValueTensorType(shape);
-  return rewriter.create<AtenViewOp>(this->loc, resType, originOp, listShapeOp);  
+  return rewriter.create<AtenViewOp>(this->loc, resType, originOp, listShapeOp);
 }
 Value RewriteOp::createMmOp(Type result, Value inputOp, Value weightOp) {
   return rewriter.create<AtenMmOp>(this->loc, result, inputOp, weightOp);
@@ -230,23 +229,25 @@ Value RewriteOp::createMmOp(Type result, Value inputOp, Value weightOp) {
 Value RewriteOp::createMmOp(Value inputOp, Value weightOp) {
   return this->createMmOp(inputOp.getType(), inputOp, weightOp);
 }
-//replace operations
-void RewriteOp::replaceTensorOp(ValueTensorLiteralOp &oldTensor, vector<int64_t> shape, vector<float> tensor) {
+// replace operations
+void RewriteOp::replaceTensorOp(ValueTensorLiteralOp &oldTensor,
+                                vector<int64_t> shape, vector<float> tensor) {
   auto tensorType = getValueTensorType(shape);
   auto tensorDense = getTensorDense(shape, tensor);
-  rewriter.replaceOpWithNewOp<ValueTensorLiteralOp>(oldTensor, tensorType, tensorDense);
+  rewriter.replaceOpWithNewOp<ValueTensorLiteralOp>(oldTensor, tensorType,
+                                                    tensorDense);
 }
-void RewriteOp::replaceOp(Value newOp) {
-  rewriter.replaceOp(this->op, newOp);
-}
-// about tensor 
+void RewriteOp::replaceOp(Value newOp) { rewriter.replaceOp(this->op, newOp); }
+// about tensor
 ValueTensorType RewriteOp::getValueTensorType(vector<int64_t> shape) {
-  return ValueTensorType::get(this->context, llvm::ArrayRef(shape), rewriter.getF32Type());
+  return ValueTensorType::get(this->context, llvm::ArrayRef(shape),
+                              rewriter.getF32Type());
 }
 ValueTensorType RewriteOp::getLeastValueTensorType() {
   return ValueTensorType::getWithLeastStaticInformation(this->context);
 }
-DenseElementsAttr RewriteOp::getTensorDense(vector<int64_t> shape, vector<float> tensor) {
+DenseElementsAttr RewriteOp::getTensorDense(vector<int64_t> shape,
+                                            vector<float> tensor) {
   return DenseElementsAttr::get(
       RankedTensorType::get(llvm::ArrayRef(shape), rewriter.getF32Type()),
       llvm::ArrayRef(tensor));

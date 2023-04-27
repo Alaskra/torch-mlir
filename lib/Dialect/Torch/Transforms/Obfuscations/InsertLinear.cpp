@@ -214,7 +214,7 @@ static std::vector<Value> createABCD(RewriteOp &rewrite, long N) {
   auto tensorD = std::vector<float>(D, D + N);
 
   Value weightA = rewrite.createTensorOp(shapeWeight, tensorA);
-  Value biasB = rewrite.createTensorOp(shapeBias,tensorB);
+  Value biasB = rewrite.createTensorOp(shapeBias, tensorB);
   Value weightC = rewrite.createTensorOp(shapeWeight, tensorC);
   Value biasD = rewrite.createTensorOp(shapeBias, tensorD);
 
@@ -222,15 +222,14 @@ static std::vector<Value> createABCD(RewriteOp &rewrite, long N) {
 }
 
 // insert 2 linear after relu on the layer
-static void InsertLinear(MLIRContext *context, Operation *f, std::string net, int layer) {
+static void InsertLinear(MLIRContext *context, Operation *f, int layer) {
   // input test
   input_assert(layer < 1, "layer > 0 \n");
   // get operations that you need
-  OpList oplist;
-  int type = getReluOp(oplist, f, layer);
-  if (!type) return;
-  // get relu operations
-  auto op = *oplist.begin();
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
+    return;
+  int type = getReluType(op);
   // init rewrite
   RewriteOp rewrite(context, op);
   // get output tensor
@@ -252,11 +251,11 @@ static void InsertLinear(MLIRContext *context, Operation *f, std::string net, in
   // create first linear
   Value rst = rewrite.createMmOp(oldResult, values[0]);
   rst = rewrite.createAddTensorOp(rst, values[1], int1);
-  Value relu = rewrite.createReluOp(rst);
+  Value relu = rewrite.createReluOp(type, rst);
   // create second linear
   rst = rewrite.createMmOp(relu, values[2]);
   rst = rewrite.createAddTensorOp(rst, values[3], int1);
-  relu = rewrite.createReluOp(rst);
+  relu = rewrite.createReluOp(type, rst);
 
   // reshape back to origin shape
   if (needReshape)
@@ -264,4 +263,4 @@ static void InsertLinear(MLIRContext *context, Operation *f, std::string net, in
   rewrite.replaceOp(relu);
 }
 
-use_pass(InsertLinear, 2, std::string, net, int, layer);
+use_pass(InsertLinear, 1, int, layer);

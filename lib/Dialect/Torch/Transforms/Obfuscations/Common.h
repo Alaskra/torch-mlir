@@ -44,8 +44,8 @@ using std::vector;
 // frequently-used function about getting ops
 typedef llvm::SmallPtrSet<Operation *, 16> OpList;
 bool getConvMiddleOps(OpList &oplist, Operation *f, int layer);
-//bool getConvOp(OpList &oplist, Operation *f, int layer);
-int getReluOp(OpList &oplist, Operation *f, int layer);
+Operation *getReluOp(Operation *f, int layer);
+int getReluType(Operation *reluOp);
 
 // frequently-used function about tensor and shape
 vector<int64_t> getShape(Value tensorOp);
@@ -58,14 +58,11 @@ int getKernelSize(vector<int64_t> kernelShape);
 void copyTensor(vector<float> &ktensor, ValueTensorLiteralOp tensor);
 void creatOneTensor(vector<float> &ktensor, int64_t len);
 
-
 Value createTensor(IRRewriter &rewriter, Location loc, MLIRContext *context,
                    std::vector<long> shape, std::vector<float> weight);
 Value createReshape(IRRewriter &rewriter, Location loc, MLIRContext *context,
                     std::vector<long> shape, Value originVal);
 SmallPtrSet<Operation *, 16> getPositiveLayers(Operation *f);
-
-
 
 // **************class about rewriter***************
 class RewriteOp {
@@ -74,6 +71,7 @@ private:
   IRRewriter rewriter;
   Location loc;
   Operation *op;
+
 public:
   RewriteOp(MLIRContext *context, Operation *op);
   Operation *cloneOp();
@@ -83,13 +81,17 @@ public:
   Value createFloatOp(double value);
   Value createTensorOp(vector<int64_t> shape, vector<float> tensor);
   Value createAddTensorOp(Value tensor1, Value tensor2, Value alpha);
-  Value createSliceTensorOp(vector<int64_t> branchShape, Value input, Value dim, Value start, Value end);
+  Value createSliceTensorOp(vector<int64_t> branchShape, Value input, Value dim,
+                            Value start, Value end);
   Value createListOp(Type elemType, vector<Value> elemVec);
-  Value createCatTensorOp(vector<int64_t> resultShape, Value dim, vector<Value> tensorVec);
-  Value createConvOp(Type result, ValueRange tensorParam, vector<int64_t> intParam);
-  Value createConvOp(ValueRange tensorParam, vector<int64_t> intParam);
-  Value createConvOp(Type result, ValueRange tensorParam);
-  Value createConvOp(ValueRange tensorParam);
+  Value createCatTensorOp(vector<int64_t> resultShape, Value dim,
+                          vector<Value> tensorVec);
+  Value createConvOp(Type result, ValueRange tensorParam,
+                     vector<int64_t> intParam = {1, 0, 1, 1});
+  Value createConvOp(ValueRange tensorParam,
+                     vector<int64_t> intParam = {1, 0, 1, 1});
+  // Value createConvOp(Type result, ValueRange tensorParam);
+  // Value createConvOp(ValueRange tensorParam);
   Value createReluOp(Value inputOp);
   Value createLeakyReluOp(Value inputOp, Value nslope);
   Value createLeakyReluOp(Value inputOp);
@@ -97,10 +99,11 @@ public:
   Value createReshape(vector<long> shape, Value originOp);
   Value createMmOp(Type result, Value inputOp, Value weightOp);
   Value createMmOp(Value inputOp, Value weightOp);
-  //replace operations
-  void replaceTensorOp(ValueTensorLiteralOp &oldTensor, vector<int64_t> shape, vector<float> tensor);
+  // replace operations
+  void replaceTensorOp(ValueTensorLiteralOp &oldTensor, vector<int64_t> shape,
+                       vector<float> tensor);
   void replaceOp(Value newOp);
-  // about tensor 
+  // about tensor
   ValueTensorType getValueTensorType(vector<int64_t> shape);
   ValueTensorType getLeastValueTensorType();
   DenseElementsAttr getTensorDense(vector<int64_t> shape, vector<float> tensor);
