@@ -232,3 +232,5 @@ Value createTensor(IRRewriter &rewriter, Location loc, MLIRContext *context,
 Value createReshape(IRRewriter &rewriter, Location loc, MLIRContext *context,
                     std::vector<long> shape, Value originVal);
 SmallPtrSet<Operation *, 16> getPositiveLayers(Operation *f);
+SmallPtrSet<Operation *, 16> getReluLayers(Operation *f);
+SmallPtrSet<Operation *, 16> getConvLayers(Operation *f);

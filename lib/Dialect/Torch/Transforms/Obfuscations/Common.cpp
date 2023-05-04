@@ -77,3 +77,30 @@ llvm::SmallPtrSet<Operation *, 16> getPositiveLayers(Operation *f) {
   });
   return opWorklist;
 }
+
+llvm::SmallPtrSet<Operation *, 16> getReluLayers(Operation *f) {
+  // get ops which output is positive
+  llvm::SmallPtrSet<Operation *, 16> opWorklist;
+  f->walk([&](Operation *op) {
+    if (isa<AtenReluOp>(op)) {
+      if (op->getResult(0).getType().isa<ValueTensorType>()) {
+        opWorklist.insert(op);
+      }
+    }
+  });
+  return opWorklist;
+}
+
+llvm::SmallPtrSet<Operation *, 16> getConvLayers(Operation *f) {
+  // get ops which output is positive
+  llvm::SmallPtrSet<Operation *, 16> opWorklist;
+  f->walk([&](Operation *op) {
+    if (isa<AtenConvolutionOp>(op)) {
+      if (op->getResult(0).getType().isa<ValueTensorType>()) {
+        opWorklist.insert(op);
+      }
+    }
+  });
+  return opWorklist;
+}
+

@@ -26,24 +26,42 @@ using namespace mlir;
 using namespace mlir::torch;
 using namespace mlir::torch::Torch;
 
-static void insertInception(MLIRContext *context, Operation *f, int number) {
+static void insertInception(MLIRContext *context, Operation *f, int number, int layer) {
   // this demo insert a Inception into the network
 
-  llvm::SmallPtrSet<Operation *, 16> opWorklist;
-  f->walk([&](Operation *op) {
-    if (isa<AtenConvolutionOp>(op)) {
-      opWorklist.insert(op);
+  input_assert(layer < 1, "layer > 0 \n");
+  input_assert(number < 1, "number > 0 \n");
+
+  llvm::SmallPtrSet<Operation *, 16> opWorklist = getPositiveLayers(f);
+  if (opWorklist.empty() || layer > (int)opWorklist.size()) {
+      llvm::errs() << "Not run InsertInception\n";
+      return;
     }
-  });
+  
 
   auto it = opWorklist.begin();
-  it++;
-  AtenConvolutionOp convOp = llvm::dyn_cast<AtenConvolutionOp>(*it);
+  std::advance(it, layer - 1);
+
+  Operation *op = *it;
   IRRewriter rewriter(context);
-  rewriter.setInsertionPoint(convOp);
-  Location loc = convOp.getLoc();
-  auto shape =
-      convOp.getOperand(0).getType().cast<ValueTensorType>().getSizes().vec();
+  rewriter.setInsertionPointAfter(op);
+  Operation *newOp = rewriter.clone(*op);
+  Location loc = newOp->getLoc();
+  Value rst = newOp->getResult(0);
+  
+  //change
+  std::vector<long> shapeOrigin =
+        rst.getType().cast<ValueTensorType>().getSizes().vec();
+  bool needReshape = false;
+  std::vector<long> shapeNew(4 - shapeOrigin.size(), 1);
+  shapeNew.insert(shapeNew.end(), shapeOrigin.begin(), shapeOrigin.end());
+  if (shapeOrigin.size() != 4) {
+    needReshape = true;
+  }
+  if (needReshape)
+    rst = createReshape(rewriter, loc, context, shapeNew, rst);
+
+  auto shape = rst.getType().cast<ValueTensorType>().getSizes().vec();
   Value int0 =
       rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(0));
   Value int1 =
@@ -66,7 +84,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
 
   std::vector<Value> values(number_branch + 1);
   std::vector<int64_t> shape_dim_1(number_branch);
-  values[0] = convOp.getOperand(0);
+  values[0] = rst;
   for (int i = 0; i < number_branch; i++) {
     int branch_structure = dis(gen);
     if (branch_structure == 1) {
@@ -91,11 +109,8 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       Value Weight =
           createTensor(rewriter, loc, context, shape_weight, WeightVec);
       // bias
-      auto shape_bias = convOp.getOperand(2)
-                            .getType()
-                            .cast<ValueTensorType>()
-                            .getSizes()
-                            .vec();
+      auto shape_bias = shape;
+      shape_bias.erase(shape_bias.begin()+1, shape_bias.end());
       shape_bias[0] = shape_weight[0];
       std::vector<float> BiasVec(shape_bias[0]);
       for (int i = 0; i < shape_bias[0]; ++i) {
@@ -105,7 +120,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       Value list_padding = rewriter.create<PrimListConstructOp>(
           loc, ListType::get(IntType::get(context)), ValueRange({int0, int0}));
       values[i + 1] = rewriter.create<AtenConvolutionOp>(
-          loc, convOp.getOperand(0).getType(), convOp.getOperand(0), Weight,
+          loc, rst.getType(), rst, Weight,
           Bias, list_stride, list_padding, list_dilation, constFalse, list,
           int1);
     } else if (branch_structure == 2) {
@@ -129,11 +144,8 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       Value Weight =
           createTensor(rewriter, loc, context, shape_weight, WeightVec);
       // bias
-      auto shape_bias = convOp.getOperand(2)
-                            .getType()
-                            .cast<ValueTensorType>()
-                            .getSizes()
-                            .vec();
+      auto shape_bias = shape;
+      shape_bias.erase(shape_bias.begin()+1, shape_bias.end());
       shape_bias[0] = shape_weight[0];
       std::vector<float> BiasVec(shape_bias[0]);
       for (int i = 0; i < shape_bias[0]; ++i) {
@@ -143,11 +155,11 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       Value list_padding = rewriter.create<PrimListConstructOp>(
           loc, ListType::get(IntType::get(context)), ValueRange({int0, int0}));
       Value randomConv_1 = rewriter.create<AtenConvolutionOp>(
-          loc, convOp.getOperand(0).getType(), convOp.getOperand(0), Weight,
+          loc, rst.getType(), rst, Weight,
           Bias, list_stride, list_padding, list_dilation, constFalse, list,
           int1);
       Value relu_1 = rewriter.create<AtenReluOp>(
-          loc, convOp.getOperand(0).getType(), randomConv_1);
+          loc, rst.getType(), randomConv_1);
 
       // 改变kernel_size的大小,进行第二次卷积
       int padNum = dis(gen);
@@ -205,7 +217,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
           loc, ListType::get(IntType::get(context)),
           ValueRange({intKernel, intKernel}));
       Value maxPool2dOp = rewriter.create<AtenMaxPool2dOp>(
-          loc, convOp.getOperand(0).getType(), convOp.getOperand(0),
+          loc, rst.getType(), rst,
           list_kernel, list_stride, list_padding, list_dilation, constFalse);
 
       // convOp
@@ -237,11 +249,8 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       Value Weight =
           createTensor(rewriter, loc, context, shape_weight, WeightVec);
       // bias
-      auto shape_bias = convOp.getOperand(2)
-                            .getType()
-                            .cast<ValueTensorType>()
-                            .getSizes()
-                            .vec();
+      auto shape_bias = shape;
+      shape_bias.erase(shape_bias.begin()+1, shape_bias.end());
       shape_bias[0] = shape_weight[0];
       std::vector<float> BiasVec(shape_bias[0]);
       for (int i = 0; i < shape_bias[0]; ++i) {
@@ -286,8 +295,7 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
       rewriter.create<AtenCatOp>(loc, zeroCat.getType(), list_cat, int1);
 
   // conv
-  auto shape_weight =
-      convOp.getOperand(1).getType().cast<ValueTensorType>().getSizes().vec();
+  auto shape_weight = shape;
   shape_weight[0] = shape[1];
   shape_weight[1] = shape_cat[1];
   shape_weight[2] = shape_weight[3] = 1;
@@ -308,8 +316,8 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
   Value Weight =
       rewriter.create<ValueTensorLiteralOp>(loc, resultTensorType, dense);
   // bias
-  auto shape_bias =
-      convOp.getOperand(2).getType().cast<ValueTensorType>().getSizes().vec();
+  auto shape_bias = shape;
+  shape_bias.erase(shape_bias.begin()+1, shape_bias.end());
   shape_bias[0] = shape_weight[0];
   std::vector<float> BiasVec(shape_bias[0], 0);
   resultTensorType = ValueTensorType::get(context, llvm::ArrayRef(shape_bias),
@@ -322,30 +330,29 @@ static void insertInception(MLIRContext *context, Operation *f, int number) {
   Value list_padding = rewriter.create<PrimListConstructOp>(
       loc, ListType::get(IntType::get(context)), ValueRange({int0, int0}));
   Value conv = rewriter.create<AtenConvolutionOp>(
-      loc, convOp.getOperand(0).getType(), cat, Weight, Bias, list_stride,
+      loc, rst.getType(), cat, Weight, Bias, list_stride,
       list_padding, list_dilation, constFalse, list, int1);
 
-  rewriter.replaceOpWithNewOp<AtenConvolutionOp>(
-      convOp, convOp.getType(), conv, convOp.getOperand(1),
-      convOp.getOperand(2), convOp.getOperand(3), convOp.getOperand(4),
-      convOp.getOperand(5), convOp.getOperand(6), convOp.getOperand(7),
-      convOp.getOperand(8));
+  if (needReshape)
+      conv = createReshape(rewriter, loc, context, shapeOrigin, rst);
+
+  rewriter.replaceOp(op, conv);
 }
 
 namespace {
 class InsertInceptionPass : public InsertInceptionBase<InsertInceptionPass> {
 public:
   InsertInceptionPass() = default;
-  InsertInceptionPass(int number) { this->number = number; }
+  InsertInceptionPass(int number, int layer) { this->number = number, this->layer = layer; }
   void runOnOperation() override {
     MLIRContext *context = &getContext();
     auto f = getOperation();
-    insertInception(context, f, number);
+    insertInception(context, f, number, layer);
   }
 };
 } // namespace
 
 std::unique_ptr<OperationPass<func::FuncOp>>
-mlir::torch::Torch::createInsertInceptionPass(int number) {
-  return std::make_unique<InsertInceptionPass>(number);
+mlir::torch::Torch::createInsertInceptionPass(int number, int layer) {
+  return std::make_unique<InsertInceptionPass>(number, layer);
 }

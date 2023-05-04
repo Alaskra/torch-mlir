@@ -8,19 +8,10 @@ GLOBAL_TEST_REGISTRY = []
 TEST_NOT_RUN = [
     "RNNInsertSkip",
     "RNNInsertSepraConv",
-    "RNNInsertInception",
-    "RNNInsertRNN",
-    "RNNInsertRNNWithZeros",
     "LSTMInsertSkip",
     "LSTMInsertSepraConv",
-    "LSTMInsertInception",
-    "LSTMInsertRNN",
-    "LSTMInsertRNNWithZeros",
     "GRUInsertSkip",
     "GRUInsertSepraConv",
-    "GRUInsertInception",
-    "GRUInsertRNN",
-    "GRUInsertRNNWithZeros",
 ]
 # Ensure that there are no duplicate names in the global test registry.
 _SEEN_UNIQUE_NAME = set()
@@ -60,11 +51,11 @@ general_obfuscation = {
     "InsertConv": ["torch-insert-conv"],
     "InsertSepraConv": ["torch-insert-sepra-conv-layer{layer=2}"],
     "InsertLinear": ["torch-insert-linear"],
-    "ValueSplit": ["torch-value-split"],
-    "MaskSplit": ["torch-mask-split"],
-    "InsertInception": ["torch-insert-Inception{number=5}"],
-    "InsertRNN": ["torch-insert-RNN{number=5}"],
-    "InsertRNNWithZeros": ["torch-insert-RNNWithZeros{activationFunc=tanh number=5}"],
+    "ValueSplit": ["torch-value-split{layer=1}"],
+    "MaskSplit": ["torch-mask-split{layer=1}"],
+    "InsertInception": ["torch-insert-Inception{number=5 layer=1}"],
+    "InsertRNN": ["torch-insert-RNN{number=5 layer=1}"],
+    "InsertRNNWithZeros": ["torch-insert-RNNWithZeros{activationFunc=tanh number=5 layer=1}"],
 }
 
 
@@ -104,11 +95,11 @@ def addRNNTests():
         addRNNTest(f"RNN{name}", passes)
     addRNNTest(
         "RNNValueSplitRNN",
-        ["torch-value-split{net=RNN number=5}"],
+        ["torch-value-split{number=5}"],
     )
     addRNNTest(
         "RNNMaskSplitRNN",
-        ["torch-mask-split{net=RNN number=5}"],
+        ["torch-mask-split{number=5}"],
     )
     addRNNTest(
         "RNNInsertConvRNN",
