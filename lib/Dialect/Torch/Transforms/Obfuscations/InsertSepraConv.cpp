@@ -9,64 +9,37 @@
 
 #include "Common.h"
 
-// insert two separable convolution: deep-wise, point-wise
+// insert a separable convolution
 static void InsertSepraConv(MLIRContext *context, Operation *f, int layer) {
   // input test
   input_assert(layer < 1, "layer > 0 \n");
   // get operations that you need
-  Operation *op = getReluOp(f, layer);
-  if (op == nullptr)
+  OpList oplist;
+  bool is_get = getConvOp(oplist, f, layer);
+  if (!is_get)
     return;
-  int type = getReluType(op);
+  // get convolution operations
+  auto it = oplist.begin();
+  AtenConvolutionOp convOp = llvm::dyn_cast<AtenConvolutionOp>(*it);
   // init rewrite
-  RewriteOp rewrite(context, op);
-  // get output tensor
-  auto newOp = rewrite.cloneOp();
-  Value oldResult = newOp->getResult(0);
+  RewriteOp rewrite(context, convOp);
 
-  // deep-wise convolution, (out, in, 1, 1), group = in_channel
-
-  // get std shape
-  auto oldShape = getShape(oldResult);
-  std::vector<int64_t> shape = oldShape;
-  bool needReshape = false;
-  if (oldShape.size() < 4) {
-    needReshape = true;
-    shape = toStdShape(oldShape);
-    oldResult = rewrite.createReshape(shape, oldResult);
-  }
-  // get deep-wise kernel
-  int group = shape[1];
-  shape[0] = shape[1];
-  shape[1] = shape[2] = shape[3] = 1;
+  // get one kernel
+  auto shape = rewrite.getKernelShape();
+  toStdShape(shape);
   int kernelSize = getKernelSize(shape);
-  std::vector<float> deepKernelVec(kernelSize, 1);
-  Value deepKernel = rewrite.createTensorOp(shape, deepKernelVec);
+  std::vector<float> oneKernelVec(kernelSize);
+  creatOneTensor(oneKernelVec, shape[0]);
+  Value oneKernel = rewrite.createTensorOp(shape, oneKernelVec);
   // get zero bias
   toBiasShape(shape);
   std::vector<float> zeroBiasVec(shape[0], 0);
   Value zeroBias = rewrite.createTensorOp(shape, zeroBiasVec);
-  // insert deep-wise conv
-  Value deepConv =
-      rewrite.createConvOp({oldResult, deepKernel, zeroBias}, {1, 0, 1, group});
-  Value relu = rewrite.createReluOp(type, deepConv);
-
-  // point-wise convolution, (in, in, 1, 1), group = 1
-  // get point-wise kernel
-  shape = getShape(oldResult);
-  shape[0] = shape[1];
-  shape[2] = shape[3] = 1;
-  kernelSize = getKernelSize(shape);
-  std::vector<float> oneKernelVec(kernelSize);
-  creatOneTensor(oneKernelVec, shape[0]);
-  Value oneKernel = rewrite.createTensorOp(shape, oneKernelVec);
-  // insert point-wise conv
-  Value oneConv = rewrite.createConvOp({relu, oneKernel, zeroBias});
-  relu = rewrite.createReluOp(type, oneConv);
-  // reshape back to origin shape
-  if (needReshape)
-    relu = rewrite.createReshape(oldShape, relu);
-  rewrite.replaceOp(relu);
+  // insert new conv
+  Value oldInput = rewrite.getInput();
+  Value oneConv = rewrite.createConvOp(oldInput, oneKernel, zeroBias);
+  // replace old conv
+  rewrite.replaceConvOp(oneConv);
 }
 
 use_pass(InsertSepraConv, 1, int, layer);

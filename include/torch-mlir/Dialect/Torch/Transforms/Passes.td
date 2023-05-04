@@ -259,7 +259,7 @@ def InsertSkip : Pass<"torch-insert-skip", "func::FuncOp"> {
   let description = [{
   }];
   let options = [
-    Option<"layer", "layer", "int", "1", "layer to insert.">
+    Option<"layer", "layer", "int", "1", "layer to widen.">
   ];
 }
 
@@ -271,7 +271,7 @@ def InsertSepraConv : Pass<"torch-insert-sepra-conv-layer", "func::FuncOp"> {
   let description = [{
   }];
   let options = [
-    Option<"layer", "layer", "int", "1", "layer to insert.">
+    Option<"layer", "layer", "int", "1", "layer to widen.">
   ];
 }
 
@@ -283,7 +283,7 @@ def BranchLayer : Pass<"torch-branch-layer", "func::FuncOp"> {
   let description = [{
   }];
   let options = [
-    Option<"layer", "layer", "int", "1", "layer to insert.">,
+    Option<"layer", "layer", "int", "1", "layer to widen.">,
     Option<"branch", "branch", "int", "2", "number of branch.">
   ];
 }
@@ -344,24 +344,26 @@ def InsertInception : Pass<"torch-insert-Inception", "func::FuncOp"> {
 def InsertConv : Pass<"torch-insert-conv", "func::FuncOp"> {
   let summary = "Insert equivalent convolutions";
   let constructor = [{
-    mlir::torch::Torch::createInsertConvPass(/*layer=*/1)
+    mlir::torch::Torch::createInsertConvPass(/*net=*/"")
   }];
   let description = [{
   }];
   let options = [
-    Option<"layer", "layer", "int", /*default=*/"1", "layer to insert">
+    Option<"net", "net", "std::string", /*default=*/"",
+           "specify net to apply, options avaliable: RNN">
   ];
 }
 
 def InsertLinear : Pass<"torch-insert-linear", "func::FuncOp"> {
   let summary = "Insert equivalent linears";
   let constructor = [{
-    mlir::torch::Torch::createInsertLinearPass(/*layer=*/1)
+    mlir::torch::Torch::createInsertLinearPass(/*net=*/"")
   }];
   let description = [{
   }];
   let options = [
-    Option<"layer", "layer", "int", /*default=*/"1", "layer to insert">
+    Option<"net", "net", "std::string", /*default=*/"",
+           "specify net to apply, options avaliable: RNN">
   ];
 }
 
