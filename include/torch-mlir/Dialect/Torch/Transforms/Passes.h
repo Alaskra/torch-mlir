@@ -106,9 +106,9 @@ std::unique_ptr<OperationPass<func::FuncOp>> createBranchLayerPass(int layer, in
 
 std::unique_ptr<OperationPass<func::FuncOp>> createInsertSepraConvPass(int layer);
 
-std::unique_ptr<OperationPass<func::FuncOp>> createInsertConvPass(std::string net);
+std::unique_ptr<OperationPass<func::FuncOp>> createInsertConvPass(int layer);
 
-std::unique_ptr<OperationPass<func::FuncOp>> createInsertLinearPass(std::string net);
+std::unique_ptr<OperationPass<func::FuncOp>> createInsertLinearPass(int layer);
 
 std::unique_ptr<OperationPass<func::FuncOp>> createValueSplitPass(int number, int layer);
 
