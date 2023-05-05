@@ -66,12 +66,17 @@ static Value createSplit(Location loc, IRRewriter &rewriter,
 }
 
 static void maskSplit(MLIRContext *context,
-                      SmallPtrSet<Operation *, 16> opWorklist,
-                      int splitNumber) {
+                      SmallPtrSet<Operation *, 16> opWorklist, int splitNumber,
+                      int layer) {
   // replace x with x*mask1+x*mask2+...x*maskn
   // special for RNN: hidden layer in loop share the same weight
   // prerequest: all ops in opWorklist is same op in unrolling RNN loop
 
+  for (int i = 0; i < layer - 1; i++) {
+    auto it = opWorklist.begin();
+    Operation *del = *it;
+    opWorklist.erase(del);
+  }
   IRRewriter rewriter(context);
 
   // split every op in opWorklist
@@ -91,62 +96,30 @@ static void maskSplit(MLIRContext *context,
   }
 }
 
-static void maskSplitRNN(MLIRContext *context,
-                         SmallPtrSet<Operation *, 16> opWorklist,
-                         int splitNumber) {
-  // replace x with x*mask1+x*mask2+...x*maskn
-
-  // create masks
-  IRRewriter rewriter(context);
-  Operation *op = *opWorklist.begin();
-  std::vector<long> shape =
-      op->getOperand(0).getType().cast<ValueTensorType>().getSizes().vec();
-  rewriter.setInsertionPoint(op);
-  std::vector<Value> valueList =
-      createMasks(op->getLoc(), rewriter, context, splitNumber, shape);
-
-  // split every op in opWorklist
-  for (auto op : opWorklist) {
-    Location loc = op->getLoc();
-    rewriter.setInsertionPointAfter(op);
-    Operation *newOp = rewriter.clone(*op);
-    Value rst = newOp->getResult(0);
-    rst = createSplit(loc, rewriter, valueList, rst);
-    rewriter.replaceOp(op, rst);
-  }
-}
-
 namespace {
 class MaskSplitPass : public MaskSplitBase<MaskSplitPass> {
 public:
   MaskSplitPass() = default;
-  MaskSplitPass(std::string net, int number) {
-    this->net = net;
+  MaskSplitPass(int number, int layer) {
     this->number = number;
+    this->layer = layer;
   }
   void runOnOperation() override {
     auto f = getOperation();
     llvm::SmallPtrSet<Operation *, 16> opWorklist = getPositiveLayers(f);
     MLIRContext *context = &getContext();
 
-    if (opWorklist.empty()) {
+    if (opWorklist.empty() || layer > (int)opWorklist.size()) {
       llvm::errs() << "Not run MaskSplit\n";
       return;
     }
 
-    if (net == "") {
-      maskSplit(context, opWorklist, number);
-    } else if (net == "RNN") {
-      maskSplitRNN(context, opWorklist, number);
-    } else {
-      llvm::errs() << "unsupported net: " << net << "\n";
-      return;
-    }
+    maskSplit(context, opWorklist, number, layer);
   }
 };
 } // namespace
 
 std::unique_ptr<OperationPass<func::FuncOp>>
-mlir::torch::Torch::createMaskSplitPass(std::string net, int number) {
-  return std::make_unique<MaskSplitPass>(net, number);
+mlir::torch::Torch::createMaskSplitPass(int number, int layer) {
+  return std::make_unique<MaskSplitPass>(number, layer);
 }

@@ -291,20 +291,21 @@ def BranchLayer : Pass<"torch-branch-layer", "func::FuncOp"> {
 def InsertRNN : Pass<"torch-insert-RNN", "func::FuncOp"> {
   let summary = "Insert a RNN into the network";
   let constructor = [{
-    mlir::torch::Torch::createInsertRNNPass(/*NumberOfRNN=*/5)
+    mlir::torch::Torch::createInsertRNNPass(/*NumberOfRNN=*/5, /*layer=*/1)
   }];
   let description = [{
   }];
   let options = [
     Option<"number", "number", "int", /*default=*/"5",
-           "RNN numbers">
+           "RNN numbers">,
+    Option<"layer", "layer", "int", /*default=*/"1", "layer to insert.">
   ];
 }
 
 def InsertRNNWithZeros : Pass<"torch-insert-RNNWithZeros", "func::FuncOp"> {
   let summary = "Insert a RNNWithZeros into the network";
   let constructor = [{
-    mlir::torch::Torch::createInsertRNNWithZerosPass(/*activationFunc=*/"", /*NumberOfRNN=*/5)
+    mlir::torch::Torch::createInsertRNNWithZerosPass(/*activationFunc=*/"", /*NumberOfRNN=*/5, /*layer=*/1)
   }];
   let description = [{
   }];
@@ -312,7 +313,8 @@ def InsertRNNWithZeros : Pass<"torch-insert-RNNWithZeros", "func::FuncOp"> {
     Option<"activationFunc", "activationFunc", "std::string", /*default=*/"",
            "specify activationFunc to apply">,
     Option<"number", "number", "int", /*default=*/"5",
-           "RNN numbers">
+           "RNN numbers">,
+    Option<"layer", "layer", "int", /*default=*/"1", "layer to insert.">
   ];
 }
 
@@ -328,13 +330,14 @@ def InsertMaxpool : Pass<"torch-insert-Maxpool", "func::FuncOp"> {
 def InsertInception : Pass<"torch-insert-Inception", "func::FuncOp"> {
   let summary = "Insert a Inception into the network";
   let constructor = [{
-    mlir::torch::Torch::createInsertInceptionPass(/*NumberOfBranch=*/5)
+    mlir::torch::Torch::createInsertInceptionPass(/*NumberOfBranch=*/5, /*layer=*/1)
   }];
   let description = [{
   }];
   let options = [
     Option<"number", "number", "int", /*default=*/"5",
-           "Branch numbers">
+           "Branch numbers">,
+    Option<"layer", "layer", "int", /*default=*/"1", "layer to insert.">
   ];
 }
 
@@ -365,30 +368,28 @@ def InsertLinear : Pass<"torch-insert-linear", "func::FuncOp"> {
 def ValueSplit : Pass<"torch-value-split", "func::FuncOp"> {
   let summary = "split layer by value";
   let constructor = [{
-    mlir::torch::Torch::createValueSplitPass(/*net=*/"", /*splitNumber=*/2)
+    mlir::torch::Torch::createValueSplitPass(/*splitNumber=*/2, /*layer=*/1)
   }];
   let description = [{
   }];
   let options = [
-    Option<"net", "net", "std::string", /*default=*/"",
-           "specify net to apply, options avaliable: RNN">,
     Option<"number", "number", "int", /*default=*/"2",
-           "split numbers">
+           "split numbers">,
+    Option<"layer", "layer", "int", /*default=*/"1", "layer to insert">
   ];
 }
 
 def MaskSplit : Pass<"torch-mask-split", "func::FuncOp"> {
   let summary = "split layer by mask";
   let constructor = [{
-    mlir::torch::Torch::createMaskSplitPass(/*net=*/"", /*splitNumber=*/2)
+    mlir::torch::Torch::createMaskSplitPass(/*splitNumber=*/2, /*layer=*/1)
   }];
   let description = [{
   }];
   let options = [
-    Option<"net", "net", "std::string", /*default=*/"",
-           "specify net to apply, options avaliable: RNN">,
     Option<"number", "number", "int", /*default=*/"2",
-           "split numbers">
+           "split numbers">,
+    Option<"layer", "layer", "int", /*default=*/"1", "layer to insert">
   ];
 }
 

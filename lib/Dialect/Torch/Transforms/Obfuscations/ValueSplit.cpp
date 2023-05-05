@@ -64,9 +64,15 @@ static Value createSplit(Location loc, IRRewriter &rewriter,
 }
 
 static void valueSplit(MLIRContext *context,
-                       SmallPtrSet<Operation *, 16> opWorklist, int number) {
+                       SmallPtrSet<Operation *, 16> opWorklist, int number,
+                       int layer) {
   // replace input x with p1*x1+p2x2+...+pn*xn, and p1+p2+...+pn=1
 
+  for (int i = 0; i < layer - 1; i++) {
+    auto it = opWorklist.begin();
+    Operation *del = *it;
+    opWorklist.erase(del);
+  }
   IRRewriter rewriter(context);
 
   // split every op in opWorklist
@@ -88,65 +94,30 @@ static void valueSplit(MLIRContext *context,
   }
 }
 
-static void valueSplitRNN(MLIRContext *context,
-                          SmallPtrSet<Operation *, 16> opWorklist, int number) {
-  // replace input x with p1*x1+p2x2+...+pn*xn, and p1+p2+...+pn=1
-  // special for RNN: hidden layer in loop share the same weight
-  // prerequest: all ops in opWorklist is same op in unrolling RNN loop
-
-  IRRewriter rewriter(context);
-  Operation *op = *opWorklist.begin();
-  std::vector<long> empty_dim;
-  rewriter.setInsertionPoint(op);
-  std::vector<Value> valueList;
-  std::vector<float> vals = createNumbers(number);
-  for (float v : vals) {
-    valueList.push_back(createTensor(rewriter, op->getLoc(), context, empty_dim,
-                                     std::vector<float>{v}));
-  }
-
-  // split every op in opWorklist
-  for (auto op : opWorklist) {
-    Location loc = op->getLoc();
-    rewriter.setInsertionPointAfter(op);
-    Operation *newOp = rewriter.clone(*op);
-    Value rst = newOp->getResult(0);
-    rst = createSplit(loc, rewriter, valueList, rst);
-    rewriter.replaceOp(op, rst);
-  }
-}
-
 namespace {
 class ValueSplitPass : public ValueSplitBase<ValueSplitPass> {
 public:
   ValueSplitPass() = default;
-  ValueSplitPass(std::string net, int number) {
-    this->net = net;
+  ValueSplitPass(int number, int layer) {
     this->number = number;
+    this->layer = layer;
   }
   void runOnOperation() override {
     auto f = getOperation();
     llvm::SmallPtrSet<Operation *, 16> opWorklist = getPositiveLayers(f);
     MLIRContext *context = &getContext();
 
-    if (opWorklist.empty()) {
+    if (opWorklist.empty() || layer > (int)opWorklist.size()) {
       llvm::errs() << "Not run ValueSplit\n";
       return;
     }
 
-    if (net == "") {
-      valueSplit(context, opWorklist, number);
-    } else if (net == "RNN") {
-      valueSplitRNN(context, opWorklist, number);
-    } else {
-      llvm::errs() << "unsupported net: " << net << "\n";
-      return;
-    }
+    valueSplit(context, opWorklist, number, layer);
   }
 };
 } // namespace
 
 std::unique_ptr<OperationPass<func::FuncOp>>
-mlir::torch::Torch::createValueSplitPass(std::string net, int number) {
-  return std::make_unique<ValueSplitPass>(net, number);
+mlir::torch::Torch::createValueSplitPass(int number, int layer) {
+  return std::make_unique<ValueSplitPass>(number, layer);
 }

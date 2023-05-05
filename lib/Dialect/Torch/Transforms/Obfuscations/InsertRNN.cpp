@@ -26,27 +26,38 @@ using namespace mlir;
 using namespace mlir::torch;
 using namespace mlir::torch::Torch;
 
-static void insertRNN(MLIRContext *context, Operation *f, int number) {
+static void insertRNN(MLIRContext *context, Operation *f, int number,
+                      int layer) {
   // this demo insert a insert an RNN after Relu
   // 此RNN保证输入等于输出
 
-  llvm::SmallPtrSet<Operation *, 16> opWorklist;
-  f->walk([&](Operation *op) {
-    if (isa<AtenMaxPool2dOp>(op)) {
-      opWorklist.insert(op);
-    }
-  });
-  auto it = opWorklist.begin();
-  AtenMaxPool2dOp maxpool2dOp = llvm::dyn_cast<AtenMaxPool2dOp>(*it);
+  input_assert(layer < 1, "layer > 0 \n");
+  input_assert(number < 1, "number > 0 \n");
+
+  // get operations that you need
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
+    return;
+
   IRRewriter rewriter(context);
-  rewriter.setInsertionPoint(maxpool2dOp);
-  Location loc = maxpool2dOp.getLoc();
-  Value rst = maxpool2dOp.getOperand(0);
-  auto shape = maxpool2dOp.getOperand(0)
-                   .getType()
-                   .cast<ValueTensorType>()
-                   .getSizes()
-                   .vec();
+  rewriter.setInsertionPointAfter(op);
+  Operation *newOp = rewriter.clone(*op);
+  Location loc = newOp->getLoc();
+  Value rst = newOp->getResult(0);
+
+  // change
+  std::vector<long> shapeOrigin =
+      rst.getType().cast<ValueTensorType>().getSizes().vec();
+  bool needReshape = false;
+  std::vector<long> shapeNew(4 - shapeOrigin.size(), 1);
+  shapeNew.insert(shapeNew.end(), shapeOrigin.begin(), shapeOrigin.end());
+  if (shapeOrigin.size() != 4) {
+    needReshape = true;
+  }
+  if (needReshape)
+    rst = createReshape(rewriter, loc, context, shapeNew, rst);
+
+  auto shape = rst.getType().cast<ValueTensorType>().getSizes().vec();
   int cycles = number; // RNN层数
   // create a RNN to make sure output is the same as input
   Value int0 =
@@ -111,7 +122,7 @@ static void insertRNN(MLIRContext *context, Operation *f, int number) {
   // transpose_hidden
   auto shape_transpose = shape;
   shape_transpose.erase(shape_transpose.begin(), shape_transpose.begin() + 2);
-  shape_transpose[0] = shape_transpose[1] = shape[2];
+  shape_transpose[0] = shape_transpose[1] = shape[3];
   int size_transpose = shape_transpose[0] * shape_transpose[1];
   std::vector<float> valueTransposeVec(size_transpose);
   for (int i = 0; i < shape_transpose[0]; i++) {
@@ -136,6 +147,7 @@ static void insertRNN(MLIRContext *context, Operation *f, int number) {
 
   Value valueAdd = createTensor(rewriter, loc, context, shape_add, valueAddVec);
 
+  // parameters of slice
   Value int_start =
       rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(0));
 
@@ -209,7 +221,7 @@ static void insertRNN(MLIRContext *context, Operation *f, int number) {
       auto shape_transpose_2 = shape;
       shape_transpose_2.erase(shape_transpose_2.begin(),
                               shape_transpose_2.begin() + 2);
-      shape_transpose_2[0] = shape_transpose_2[1] = shape[2];
+      shape_transpose_2[0] = shape_transpose_2[1] = shape[3];
       int size_transpose_2 = shape_transpose_2[0] * shape_transpose_2[1];
       std::vector<float> valueTranspose_2Vec(size_transpose_2);
       for (int i = 0; i < shape_transpose_2[0]; i++) {
@@ -264,31 +276,32 @@ static void insertRNN(MLIRContext *context, Operation *f, int number) {
           rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(2));
 
       slice = rewriter.create<AtenSliceTensorOp>(
-          loc, maxpool2dOp.getOperand(0).getType(), unsqueeze, int_dim,
-          int_start, int_end, int1);
+          loc, rst.getType(), unsqueeze, int_dim, int_start, int_end, int1);
     }
   }
 
-  rewriter.replaceOpWithNewOp<AtenMaxPool2dOp>(
-      maxpool2dOp, maxpool2dOp.getType(), slice, maxpool2dOp.getOperand(1),
-      maxpool2dOp.getOperand(2), maxpool2dOp.getOperand(3),
-      maxpool2dOp.getOperand(4), maxpool2dOp.getOperand(5));
+  if (needReshape)
+    slice = createReshape(rewriter, loc, context, shapeOrigin, rst);
+
+  rewriter.replaceOp(op, slice);
 }
 
 namespace {
 class InsertRNNPass : public InsertRNNBase<InsertRNNPass> {
 public:
   InsertRNNPass() = default;
-  InsertRNNPass(int number) { this->number = number; }
+  InsertRNNPass(int number, int layer) {
+    this->number = number, this->layer = layer;
+  }
   void runOnOperation() override {
     MLIRContext *context = &getContext();
     auto f = getOperation();
-    insertRNN(context, f, number);
+    insertRNN(context, f, number, layer);
   }
 };
 } // namespace
 
 std::unique_ptr<OperationPass<func::FuncOp>>
-mlir::torch::Torch::createInsertRNNPass(int number) {
-  return std::make_unique<InsertRNNPass>(number);
+mlir::torch::Torch::createInsertRNNPass(int number, int layer) {
+  return std::make_unique<InsertRNNPass>(number, layer);
 }
