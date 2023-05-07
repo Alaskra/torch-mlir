@@ -27,23 +27,36 @@ using namespace mlir::torch;
 using namespace mlir::torch::Torch;
 
 static void insertRNNWithZeros(MLIRContext *context, Operation *f,
-                               std::string activationFunc, int number) {
+                               std::string activationFunc, int number,
+                               int layer) {
   // this demo insert a RNN into the network
   // 纯粹增加了一个RNN循环层,最后通过残差连接达到传播原tensor的目的
-  llvm::SmallPtrSet<Operation *, 16> opWorklist;
-  f->walk([&](Operation *op) {
-    if (isa<AtenReluOp>(op)) {
-      if (op->getResult(0).getType().isa<ValueTensorType>()) {
-        opWorklist.insert(op);
-      }
-    }
-  });
+  // input test
+  input_assert(layer < 1, "layer > 0 \n");
+  input_assert(number < 1, "number > 0 \n");
 
-  auto it = opWorklist.begin();
-  AtenReluOp reluOp = llvm::dyn_cast<AtenReluOp>(*it);
+  // get operations that you need
+  Operation *op = getReluOp(f, layer);
+  if (op == nullptr)
+    return;
+
   IRRewriter rewriter(context);
-  rewriter.setInsertionPoint(reluOp);
-  Location loc = reluOp.getLoc();
+  rewriter.setInsertionPointAfter(op);
+  Operation *newOp = rewriter.clone(*op);
+  Location loc = newOp->getLoc();
+  Value rst = newOp->getResult(0);
+
+  // change
+  std::vector<long> shapeOrigin =
+      rst.getType().cast<ValueTensorType>().getSizes().vec();
+  bool needReshape = false;
+  std::vector<long> shapeNew(4 - shapeOrigin.size(), 1);
+  shapeNew.insert(shapeNew.end(), shapeOrigin.begin(), shapeOrigin.end());
+  if (shapeOrigin.size() != 4) {
+    needReshape = true;
+  }
+  if (needReshape)
+    rst = createReshape(rewriter, loc, context, shapeNew, rst);
 
   // create other oprands for RNN
   Value int0 =
@@ -54,15 +67,13 @@ static void insertRNNWithZeros(MLIRContext *context, Operation *f,
       rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(0));
   Value float1 =
       rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1));
-  Value rst = reluOp.getOperand();
-  auto shape =
-      reluOp.getOperand().getType().cast<ValueTensorType>().getSizes().vec();
-  // create related parameters
+  auto shape = rst.getType().cast<ValueTensorType>().getSizes().vec();
   int cycles = number; // RNN层数
 
   // hidden
   auto shape_hidden = shape;
   shape_hidden.erase(shape_hidden.begin(), shape_hidden.begin() + 1);
+  shape_hidden[0] = shape[0] * shape[1];
   int size_hidden = shape_hidden[0] * shape_hidden[1] * shape_hidden[2];
   std::vector<float> zeroHiddenVec(size_hidden, 0);
   Value zeroHidden =
@@ -72,7 +83,7 @@ static void insertRNNWithZeros(MLIRContext *context, Operation *f,
   auto shape_transpose_a = shape;
   shape_transpose_a.erase(shape_transpose_a.begin(),
                           shape_transpose_a.begin() + 2);
-  shape_transpose_a[0] = shape_transpose_a[1] = shape[2];
+  shape_transpose_a[0] = shape_transpose_a[1] = shape[3];
   int size_transpose_a = shape_transpose_a[0] * shape_transpose_a[1];
   std::vector<float> zeroTranspose_aVec(size_transpose_a, 0);
   Value valueTranspose_a = createTensor(rewriter, loc, context,
@@ -81,8 +92,8 @@ static void insertRNNWithZeros(MLIRContext *context, Operation *f,
   // add
   auto shape_add = shape;
   shape_add.erase(shape_add.begin() + 1, shape_add.end());
-  std::vector<float> valueAddVec(shape_add[0], 0);
   shape_add[0] = shape[3];
+  std::vector<float> valueAddVec(shape_add[0], 0);
   Value valueAdd = createTensor(rewriter, loc, context, shape_add, valueAddVec);
 
   // create result_type
@@ -240,7 +251,6 @@ static void insertRNNWithZeros(MLIRContext *context, Operation *f,
           ValueTensorType::get(context, llvm::ArrayRef(shape_unsqueeze),
                                rewriter.getF32Type()),
           add_output, int0);
-
       Value int_start =
           rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(0));
 
@@ -251,17 +261,17 @@ static void insertRNNWithZeros(MLIRContext *context, Operation *f,
           rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(2));
 
       slice = rewriter.create<AtenSliceTensorOp>(
-          loc, reluOp.getOperand().getType(), unsqueeze, int_dim, int_start,
-          int_end, int1);
+          loc, rst.getType(), unsqueeze, int_dim, int_start, int_end, int1);
     }
   }
 
   // 利用残差进行相加
-  Value add_rst = rewriter.create<AtenAddTensorOp>(
-      loc, reluOp.getOperand().getType(), rst, slice, float0);
-
+  Value add_rst =
+      rewriter.create<AtenAddTensorOp>(loc, rst.getType(), rst, slice, float0);
+  if (needReshape)
+    add_rst = createReshape(rewriter, loc, context, shapeOrigin, add_rst);
   // relu
-  rewriter.replaceOpWithNewOp<AtenReluOp>(reluOp, reluOp.getType(), add_rst);
+  rewriter.replaceOp(op, add_rst);
 }
 
 namespace {
@@ -269,20 +279,22 @@ class InsertRNNWithZerosPass
     : public InsertRNNWithZerosBase<InsertRNNWithZerosPass> {
 public:
   InsertRNNWithZerosPass() = default;
-  InsertRNNWithZerosPass(std::string activationFunc, int number) {
+  InsertRNNWithZerosPass(std::string activationFunc, int number, int layer) {
     this->activationFunc = activationFunc;
     this->number = number;
+    this->layer = layer;
   }
   void runOnOperation() override {
     MLIRContext *context = &getContext();
     auto f = getOperation();
-    insertRNNWithZeros(context, f, activationFunc, number);
+    insertRNNWithZeros(context, f, activationFunc, number, layer);
   }
 };
 } // namespace
 
 std::unique_ptr<OperationPass<func::FuncOp>>
 mlir::torch::Torch::createInsertRNNWithZerosPass(std::string activationFunc,
-                                                 int number) {
-  return std::make_unique<InsertRNNWithZerosPass>(activationFunc, number);
+                                                 int number, int layer) {
+  return std::make_unique<InsertRNNWithZerosPass>(activationFunc, number,
+                                                  layer);
 }

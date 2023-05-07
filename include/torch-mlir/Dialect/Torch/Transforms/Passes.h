@@ -110,17 +110,17 @@ std::unique_ptr<OperationPass<func::FuncOp>> createInsertConvPass(int layer);
 
 std::unique_ptr<OperationPass<func::FuncOp>> createInsertLinearPass(int layer);
 
-std::unique_ptr<OperationPass<func::FuncOp>> createValueSplitPass(std::string net, int number);
+std::unique_ptr<OperationPass<func::FuncOp>> createValueSplitPass(int number, int layer);
 
-std::unique_ptr<OperationPass<func::FuncOp>> createMaskSplitPass(std::string net, int number);
+std::unique_ptr<OperationPass<func::FuncOp>> createMaskSplitPass(int number, int layer);
 
-std::unique_ptr<OperationPass<func::FuncOp>> createInsertRNNPass(int number);
+std::unique_ptr<OperationPass<func::FuncOp>> createInsertRNNPass(int number, int layer);
 
-std::unique_ptr<OperationPass<func::FuncOp>> createInsertRNNWithZerosPass(std::string net, int number);
+std::unique_ptr<OperationPass<func::FuncOp>> createInsertRNNWithZerosPass(std::string activationFunc, int number, int layer);
 
 std::unique_ptr<OperationPass<func::FuncOp>> createInsertMaxpoolPass();
 
-std::unique_ptr<OperationPass<func::FuncOp>> createInsertInceptionPass(int number);
+std::unique_ptr<OperationPass<func::FuncOp>> createInsertInceptionPass(int number, int layer);
 
 std::unique_ptr<OperationPass<ModuleOp>> createPreprocessShapeLibraryPass();
 
