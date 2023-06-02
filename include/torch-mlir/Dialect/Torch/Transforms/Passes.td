@@ -278,13 +278,13 @@ def InsertSepraConv : Pass<"torch-insert-sepra-conv-layer", "func::FuncOp"> {
 def BranchLayer : Pass<"torch-branch-layer", "func::FuncOp"> {
   let summary = "Branch the colored layer and insert a convolution into the left branch";
   let constructor = [{
-    mlir::torch::Torch::createBranchLayerPass(/*layer=*/1,/*branch=*/2)
+    mlir::torch::Torch::createBranchLayerPass(/*layer=*/1,/*number=*/2)
   }];
   let description = [{
   }];
   let options = [
     Option<"layer", "layer", "int", "1", "layer to insert.">,
-    Option<"branch", "branch", "int", "2", "number of branch.">
+    Option<"number", "number", "int", "2", "number of branch.">
   ];
 }
 

@@ -209,13 +209,15 @@ static void insertRNNWithZeros(MLIRContext *context, Operation *f,
 
     // random activation
     Value random_hidden;
-    if (activationFunc == "relu" || activationFunc == "") {
-      random_hidden =
-          rewriter.create<AtenReluOp>(loc, add_hidden.getType(), add_hidden);
-    } else if (activationFunc == "sigmoid") {
+    // if (activationFunc == "relu" || activationFunc == "") {
+    //   random_hidden =
+    //       rewriter.create<AtenReluOp>(loc, add_hidden.getType(), add_hidden);
+    // } 
+    if (activationFunc == "sigmoid" || activationFunc == "") {
       random_hidden =
           rewriter.create<AtenSigmoidOp>(loc, add_hidden.getType(), add_hidden);
-    } else if (activationFunc == "tanh") {
+    } 
+    else if (activationFunc == "tanh") {
       random_hidden =
           rewriter.create<AtenTanhOp>(loc, add_hidden.getType(), add_hidden);
     }

@@ -102,7 +102,7 @@ std::unique_ptr<OperationPass<func::FuncOp>> createWidenConvLayerPass(int layer,
 
 std::unique_ptr<OperationPass<func::FuncOp>> createInsertSkipPass(int layer);
 
-std::unique_ptr<OperationPass<func::FuncOp>> createBranchLayerPass(int layer, int branch);
+std::unique_ptr<OperationPass<func::FuncOp>> createBranchLayerPass(int layer, int number);
 
 std::unique_ptr<OperationPass<func::FuncOp>> createInsertSepraConvPass(int layer);
 

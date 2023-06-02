@@ -28,12 +28,12 @@ static Value InertOneConv(RewriteOp &rewrite, vector<int64_t> shape,
   return rewrite.createConvOp({inputOp, oneKernel, zeroBias});
 }
 
-// branch the layer and insert a
-// convolution into the branchs randomly.
+// number the layer and insert a
+// convolution into the numbers randomly.
 static void BranchLayer(MLIRContext *context, Operation *f, int layer,
-                        int branch) {
+                        int number) {
   // input test
-  input_assert(branch < 2, "branch > 1 \n");
+  input_assert(number < 2, "number > 1 \n");
   input_assert(layer < 1, "layer > 0 \n");
   // get operations that you need
   Operation *op = getReluOp(f, layer);
@@ -44,12 +44,12 @@ static void BranchLayer(MLIRContext *context, Operation *f, int layer,
   // get input information
   auto inputShape = getShape(op->getResult(0));
   int inputChannels = inputShape[dim];
-  // branch test: channels
+  // number test: channels
   llvm_assert(inputChannels < 2, "error: input_channels(%d) <= 1 \n",
               inputChannels);
-  llvm_assert(inputChannels <= branch,
-              "error: input_channels(%d) <= branch(%d) \n", inputChannels,
-              branch);
+  llvm_assert(inputChannels <= number,
+              "error: input_channels(%d) <= number(%d) \n", inputChannels,
+              number);
   // init rewrite
   RewriteOp rewrite(context, op);
   // get output tensor
@@ -57,54 +57,54 @@ static void BranchLayer(MLIRContext *context, Operation *f, int layer,
   Value oldResult = newOp->getResult(0);
 
   // slice randomly
-  std::vector<int> branchChannel(branch);
-  // tempvar: current channels, current branch, min channels, spare channels
-  int tempVar[4] = {inputChannels, branch, 0, 0};
+  std::vector<int> numberChannel(number);
+  // tempvar: current channels, current number, min channels, spare channels
+  int tempVar[4] = {inputChannels, number, 0, 0};
   srand(time(0));
-  for (int i = 0; i < branch; i++) {
+  for (int i = 0; i < number; i++) {
     tempVar[2] = tempVar[0] / tempVar[1];
     tempVar[3] = tempVar[0] % tempVar[1];
-    branchChannel[i] = tempVar[2] + rand() % (tempVar[3] + 1);
-    tempVar[0] -= branchChannel[i];
+    numberChannel[i] = tempVar[2] + rand() % (tempVar[3] + 1);
+    tempVar[0] -= numberChannel[i];
     tempVar[1] -= 1;
   }
 
   // slice tensors
-  std::vector<std::vector<int64_t>> branchShape(branch);
-  std::vector<Value> branchTensorOp(branch);
+  std::vector<std::vector<int64_t>> numberShape(number);
+  std::vector<Value> numberTensorOp(number);
   int curChannel = 0; // current channel
   Value startOp;
   Value endOp = rewrite.createIntOp(curChannel);
   Value dimOp = rewrite.createIntOp(dim);
-  for (int i = 0; i < branch; i++) {
+  for (int i = 0; i < number; i++) {
     // get shape
-    branchShape[i] = inputShape;
-    branchShape[i][dim] = branchChannel[i];
+    numberShape[i] = inputShape;
+    numberShape[i][dim] = numberChannel[i];
     // get slice tensor
     startOp = endOp;
-    curChannel += branchChannel[i];
+    curChannel += numberChannel[i];
     endOp = rewrite.createIntOp(curChannel);
-    branchTensorOp[i] = rewrite.createSliceTensorOp(branchShape[i], oldResult,
+    numberTensorOp[i] = rewrite.createSliceTensorOp(numberShape[i], oldResult,
                                                     dimOp, startOp, endOp);
   }
 
-  // handle every branch tensor randomly
+  // handle every number tensor randomly
   int handleWay;
   srand(time(0));
-  for (int i = 0; i < branch; i++) {
+  for (int i = 0; i < number; i++) {
     handleWay = rand() % 2;
     // 0: nop
     if (handleWay == 0)
       continue;
     // 1: insert one convolution
-    branchTensorOp[i] =
-        InertOneConv(rewrite, branchShape[i], branchTensorOp[i]);
+    numberTensorOp[i] =
+        InertOneConv(rewrite, numberShape[i], numberTensorOp[i]);
   }
 
-  // cat branch tensors
-  Value catOp = rewrite.createCatTensorOp(inputShape, dimOp, branchTensorOp);
+  // cat number tensors
+  Value catOp = rewrite.createCatTensorOp(inputShape, dimOp, numberTensorOp);
   Value relu = rewrite.createReluOp(type, catOp);
   rewrite.replaceOp(relu);
 }
 
-use_pass(BranchLayer, 2, int, layer, int, branch);
+use_pass(BranchLayer, 2, int, layer, int, number);
